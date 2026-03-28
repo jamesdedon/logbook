@@ -2,7 +2,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 
-from logbook.routers import goals, projects, summary, tasks, worklog
+from logbook.routers import goals, projects, search, summary, tasks, worklog
 
 
 @asynccontextmanager
@@ -17,6 +17,7 @@ app.include_router(goals.router)
 app.include_router(tasks.router)
 app.include_router(worklog.router)
 app.include_router(summary.router)
+app.include_router(search.router)
 
 
 @app.get("/health")

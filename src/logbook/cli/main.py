@@ -505,5 +505,44 @@ def blocked_tasks(json_out: bool = typer.Option(False, "--json")):
         console.print(f"  {bt['title']} — waiting on: {blockers}")
 
 
+@app.command("search")
+def search_cmd(
+    query: str = typer.Argument(..., help="Search keywords"),
+    type: str = typer.Option(None, "--type", "-t", help="Filter by type: project,goal,task,work_log_entry"),
+    limit: int = typer.Option(20, "--limit"),
+    json_out: bool = typer.Option(False, "--json"),
+):
+    params: dict = {"q": query, "limit": limit}
+    if type:
+        params["type"] = type
+
+    with _client() as c:
+        resp = c.get("/search", params=params)
+        _handle_error(resp)
+        data = resp.json()["data"]
+
+    if json_out:
+        console.print_json(json.dumps(data))
+        return
+
+    if not data["results"]:
+        console.print("No results found.")
+        return
+
+    console.print(f"[bold]Search results for \"{query}\"[/bold] ({data['total']} matches)")
+    console.print()
+    type_styles = {"project": "blue", "goal": "magenta", "task": "cyan", "work_log_entry": "green"}
+    for r in data["results"]:
+        style = type_styles.get(r["entity_type"], "white")
+        label = r["entity_type"].replace("_", " ")
+        title = r["title_snippet"].replace(">>>", "[bold]").replace("<<<", "[/bold]")
+        body = r["body_snippet"].replace(">>>", "[bold]").replace("<<<", "[/bold]")
+        console.print(f"  [{style}]{label}[/{style}] {title}")
+        if body.strip():
+            console.print(f"    [dim]{body}[/dim]")
+        console.print(f"    [dim]id: {r['entity_id']}[/dim]")
+        console.print()
+
+
 if __name__ == "__main__":
     app()

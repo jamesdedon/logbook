@@ -245,3 +245,19 @@ class WeeklyReportOut(BaseModel):
     by_project: list[ProjectWeekSummary]
     tasks_completed: list[TaskOut]
     tasks_created: list[TaskOut]
+
+
+# --- Search ---
+
+class SearchResult(BaseModel):
+    entity_type: str
+    entity_id: str
+    title_snippet: str
+    body_snippet: str
+    rank: float
+
+
+class SearchResponse(BaseModel):
+    query: str
+    total: int
+    results: list[SearchResult]

@@ -416,5 +416,41 @@ def logbook_goals(project_id: str) -> str:
     return "\n".join(lines)
 
 
+# --- Search ---
+
+@mcp.tool()
+def logbook_search(
+    query: str,
+    type: str | None = None,
+    limit: int = 20,
+) -> str:
+    """Search across all projects, goals, tasks, and work log entries using keywords.
+
+    Supports prefix matching (auto-applied), phrase matching ("exact phrase"),
+    and porter stemming (e.g. "running" matches "run").
+
+    Args:
+        query: Search keywords
+        type: Optional filter by entity type (comma-separated: project,goal,task,work_log_entry)
+        limit: Max results (default 20)
+    """
+    params: dict = {"q": query, "limit": limit}
+    if type:
+        params["type"] = type
+
+    data = _get("/search", params)["data"]
+    results = data["results"]
+    if not results:
+        return f"No results for '{query}'."
+
+    lines = [f"Search results for '{query}' ({data['total']} matches):"]
+    for r in results:
+        label = r["entity_type"].replace("_", " ")
+        lines.append(f"  [{label}] {r['title_snippet']} (id: {r['entity_id']})")
+        if r["body_snippet"].strip():
+            lines.append(f"    {r['body_snippet']}")
+    return "\n".join(lines)
+
+
 if __name__ == "__main__":
     mcp.run()
