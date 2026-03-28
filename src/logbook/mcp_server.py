@@ -2,9 +2,24 @@
 
 import json
 import os
+from datetime import datetime, timezone
 
 import httpx
 from mcp.server.fastmcp import FastMCP
+
+from logbook.config import settings
+
+
+def _to_local_time(iso_str: str) -> str:
+    """Convert an ISO-8601 UTC timestamp to local HH:MM."""
+    try:
+        dt = datetime.fromisoformat(iso_str)
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        local_dt = dt.astimezone(settings.tz)
+        return local_dt.strftime("%H:%M")
+    except (ValueError, TypeError):
+        return iso_str[11:16] if len(iso_str) > 16 else ""
 
 mcp = FastMCP("logbook", instructions=(
     "Logbook is a local work journal and planning tool. "
@@ -105,7 +120,7 @@ def logbook_today() -> str:
     if data.get("log_entries"):
         lines.append("Work logged today:")
         for e in data["log_entries"]:
-            time = e["created_at"][11:16] if len(e["created_at"]) > 16 else ""
+            time = _to_local_time(e["created_at"])
             lines.append(f"  {time} — {e['description']}")
     if data.get("tasks_completed"):
         lines.append("\nTasks completed today:")
@@ -208,7 +223,7 @@ def logbook_log_list(
         return "No log entries found."
     lines = []
     for e in entries:
-        time = e["created_at"][11:16] if len(e["created_at"]) > 16 else ""
+        time = _to_local_time(e["created_at"])
         project_note = f" [project: {e['project_id'][:12]}]" if e.get("project_id") else ""
         lines.append(f"  {time} — {e['description']}{project_note}")
     return "\n".join(lines)

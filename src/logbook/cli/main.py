@@ -531,6 +531,32 @@ def blocked_tasks(json_out: bool = typer.Option(False, "--json")):
         console.print(f"  {bt['title']} — waiting on: {blockers}")
 
 
+@app.command("restart")
+def restart():
+    """Reinstall the logbook package and restart the systemd service."""
+    import subprocess
+
+    from logbook.config import settings
+
+    console.print("[cyan]Reinstalling logbook...[/cyan]")
+    result = subprocess.run(
+        ["pip", "install", "."],
+        capture_output=True, text=True,
+        cwd=settings.project_dir,
+    )
+    if result.returncode != 0:
+        console.print(f"[red]Install failed:[/red] {result.stderr.strip()}")
+        raise typer.Exit(1)
+    console.print("[green]Installed.[/green]")
+
+    console.print("[cyan]Restarting logbook service...[/cyan]")
+    result = subprocess.run(["systemctl", "--user", "restart", "logbook"], capture_output=True, text=True)
+    if result.returncode != 0:
+        console.print(f"[red]Restart failed:[/red] {result.stderr.strip()}")
+        raise typer.Exit(1)
+    console.print("[green]Logbook service restarted.[/green]")
+
+
 @app.command("search")
 def search_cmd(
     query: str = typer.Argument(..., help="Search keywords"),

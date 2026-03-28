@@ -3,6 +3,7 @@ from datetime import datetime, timedelta, timezone
 from sqlalchemy import case, func, literal_column, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from logbook.config import settings
 from logbook.models import Goal, Project, Task, TaskDependency, WorkLogEntry
 
 
@@ -75,7 +76,8 @@ async def get_summary(db: AsyncSession) -> dict:
 
 
 async def get_today(db: AsyncSession) -> dict:
-    today_start = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0).isoformat()
+    local_now = datetime.now(settings.tz)
+    today_start = local_now.replace(hour=0, minute=0, second=0, microsecond=0).astimezone(timezone.utc).isoformat()
 
     log_result = await db.execute(
         select(WorkLogEntry)

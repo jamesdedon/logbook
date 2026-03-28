@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from fastapi.responses import PlainTextResponse
 
+from logbook.config import settings
 from logbook.database import get_db
 from logbook.schemas import (
     BlockedTaskOut,
@@ -28,6 +29,17 @@ from logbook.services.export import export_weekly_markdown
 router = APIRouter(prefix="/summary", tags=["summary"])
 
 
+def _to_local(iso_str: str) -> str:
+    """Convert a UTC ISO-8601 timestamp to local timezone."""
+    try:
+        dt = datetime.fromisoformat(iso_str)
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        return dt.astimezone(settings.tz).isoformat()
+    except (ValueError, TypeError):
+        return iso_str
+
+
 @router.get("", response_model=ItemResponse)
 async def get_summary(db: AsyncSession = Depends(get_db)):
     data = await svc.get_summary(db)
@@ -41,7 +53,7 @@ async def get_summary(db: AsyncSession = Depends(get_db)):
                 id=e.id, project_id=e.project_id, task_id=e.task_id,
                 description=e.description,
                 metadata=json.loads(e.metadata_json) if e.metadata_json else {},
-                created_at=e.created_at,
+                created_at=_to_local(e.created_at),
             )
             for e in data["recent_activity"]
         ],
@@ -68,7 +80,7 @@ async def get_today(db: AsyncSession = Depends(get_db)):
                 id=e.id, project_id=e.project_id, task_id=e.task_id,
                 description=e.description,
                 metadata=json.loads(e.metadata_json) if e.metadata_json else {},
-                created_at=e.created_at,
+                created_at=_to_local(e.created_at),
             )
             for e in data["log_entries"]
         ],
@@ -76,7 +88,7 @@ async def get_today(db: AsyncSession = Depends(get_db)):
             TaskOut(
                 id=t.id, project_id=t.project_id, goal_id=t.goal_id,
                 title=t.title, description=t.description, status=t.status,
-                priority=t.priority, created_at=t.created_at, updated_at=t.updated_at,
+                priority=t.priority, created_at=_to_local(t.created_at), updated_at=t.updated_at,
                 completed_at=t.completed_at,
             )
             for t in data["tasks_completed"]
@@ -104,7 +116,7 @@ async def get_weekly(weeks_back: int = 0, project_id: str | None = None, db: Asy
             id=e.id, project_id=e.project_id, task_id=e.task_id,
             description=e.description,
             metadata=json.loads(e.metadata_json) if e.metadata_json else {},
-            created_at=e.created_at,
+            created_at=_to_local(e.created_at),
         )
 
     def _task_out(t):
