@@ -41,6 +41,7 @@ async def get_summary(db: AsyncSession) -> dict:
         active_projects.append({
             "id": p.id,
             "name": p.name,
+            "motivation": p.motivation or "",
             "goals_active": goals_count or 0,
             "tasks_summary": task_counts,
             "blocked_tasks": blocked_count or 0,
@@ -143,6 +144,7 @@ async def get_next_actions(db: AsyncSession, limit: int = 10) -> list[dict]:
         next_actions.append({
             "id": task.id,
             "title": task.title,
+            "rationale": task.rationale or "",
             "priority": task.priority,
             "project_id": task.project_id,
             "project_name": project.name if project else "unknown",
@@ -225,11 +227,14 @@ async def get_weekly_report(db: AsyncSession, weeks_back: int = 0, project_id: s
     all_project_ids.discard("unlinked")
 
     project_names = {}
+    project_motivations = {}
     for pid in all_project_ids:
         proj = await db.get(Project, pid)
         project_names[pid] = proj.name if proj else "unknown"
+        project_motivations[pid] = (proj.motivation or "") if proj else ""
     if "unlinked" in by_project:
         project_names["unlinked"] = "Unlinked"
+        project_motivations["unlinked"] = ""
 
     return {
         "week_start": week_start_iso,
@@ -245,6 +250,7 @@ async def get_weekly_report(db: AsyncSession, weeks_back: int = 0, project_id: s
         "days": days,
         "by_project": by_project,
         "project_names": project_names,
+        "project_motivations": project_motivations,
     }
 
 

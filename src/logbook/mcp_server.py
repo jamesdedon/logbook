@@ -2,12 +2,22 @@
 
 import json
 import os
+import textwrap
 from datetime import datetime, timezone
 
 import httpx
 from mcp.server.fastmcp import FastMCP
 
 from logbook.config import settings
+
+WRAP_WIDTH = 100
+
+
+def _wrap(text: str, indent: str = "  ") -> str:
+    """Wrap text so that continuation lines stay indented after a line break."""
+    return textwrap.fill(
+        text, width=WRAP_WIDTH, initial_indent=indent, subsequent_indent=indent,
+    )
 
 
 def _to_local_time(iso_str: str) -> str:
@@ -63,15 +73,19 @@ def logbook_summary() -> str:
         lines.append(f"Project: {p['name']} — {p['goals_active']} goals, "
                      f"{ts['todo']} todo, {ts['in_progress']} active, {ts['done']} done, "
                      f"{p['blocked_tasks']} blocked")
+        if p.get("motivation"):
+            lines.append(_wrap(f"Motivation: {p['motivation']}"))
     if data.get("next_actions"):
         lines.append("\nNext up:")
         for n in data["next_actions"]:
-            lines.append(f"  [{n['priority']}] {n['title']} (project: {n['project_name']}, id: {n['id']})")
+            lines.append(_wrap(f"[{n['priority']}] {n['title']} (project: {n['project_name']}, id: {n['id']})"))
+            if n.get("rationale"):
+                lines.append(_wrap(f"Why: {n['rationale']}", indent="    "))
     if data.get("blocked_tasks"):
         lines.append("\nBlocked:")
         for bt in data["blocked_tasks"]:
             blockers = ", ".join(b["title"] for b in bt["blocked_by"])
-            lines.append(f"  {bt['title']} — waiting on: {blockers}")
+            lines.append(_wrap(f"{bt['title']} — waiting on: {blockers}"))
     return "\n".join(lines) if lines else "No active projects."
 
 
@@ -88,18 +102,20 @@ def logbook_weekly(weeks_back: int = 0, project_id: str | None = None) -> str:
         params["project_id"] = project_id
     data = _get("/summary/weekly", params=params)["data"]
     lines = [f"Weekly Report ({data['week_start'][:10]} → {data['week_end'][:10]})"]
-    lines.append(f"  {data['total_log_entries']} entries | "
-                 f"{data['total_tasks_completed']} tasks completed | "
-                 f"{data['total_tasks_created']} tasks created | "
-                 f"{data['total_goals_completed']} goals completed")
+    lines.append(_wrap(f"{data['total_log_entries']} entries | "
+                       f"{data['total_tasks_completed']} tasks completed | "
+                       f"{data['total_tasks_created']} tasks created | "
+                       f"{data['total_goals_completed']} goals completed"))
 
     if data.get("by_project"):
         lines.append("\nBy project:")
         for p in data["by_project"]:
-            lines.append(f"  {p['project_name']} — {p['entry_count']} entries")
+            lines.append(_wrap(f"{p['project_name']} — {p['entry_count']} entries"))
+            if p.get("project_motivation"):
+                lines.append(_wrap(f"Motivation: {p['project_motivation']}", indent="    "))
             for e in p["entries"]:
                 day = e["created_at"][:10]
-                lines.append(f"    {day} — {e['description']}")
+                lines.append(_wrap(f"{day} — {e['description']}", indent="    "))
 
     if data.get("tasks_completed"):
         lines.append("\nTasks completed:")
@@ -108,12 +124,12 @@ def logbook_weekly(weeks_back: int = 0, project_id: str | None = None) -> str:
             pname = t.get("project_name", "Unknown")
             by_proj.setdefault(pname, []).append(t)
         for pname, tasks in by_proj.items():
-            lines.append(f"  {pname}")
+            lines.append(_wrap(pname))
             for t in tasks:
-                lines.append(f"    ✓ {t['title']}")
+                lines.append(_wrap(f"✓ {t['title']}", indent="    "))
 
     if not data.get("by_project") and not data.get("tasks_completed"):
-        lines.append("  No activity this week.")
+        lines.append(_wrap("No activity this week."))
 
     return "\n".join(lines)
 
@@ -127,7 +143,7 @@ def logbook_today() -> str:
         lines.append("Work logged today:")
         for e in data["log_entries"]:
             time = _to_local_time(e["created_at"])
-            lines.append(f"  {time} — {e['description']}")
+            lines.append(_wrap(f"{time} — {e['description']}"))
     if data.get("tasks_completed"):
         lines.append("\nTasks completed today:")
         by_proj: dict[str, list] = {}
@@ -135,9 +151,9 @@ def logbook_today() -> str:
             pname = t.get("project_name", "Unknown")
             by_proj.setdefault(pname, []).append(t)
         for pname, tasks in by_proj.items():
-            lines.append(f"  {pname}")
+            lines.append(_wrap(pname))
             for t in tasks:
-                lines.append(f"    ✓ {t['title']}")
+                lines.append(_wrap(f"✓ {t['title']}", indent="    "))
     return "\n".join(lines) if lines else "No activity logged today."
 
 
@@ -149,7 +165,9 @@ def logbook_next() -> str:
         return "Nothing queued up."
     lines = ["Next actions:"]
     for t in data["tasks"]:
-        lines.append(f"  [{t['priority']}] {t['title']} (project: {t['project_name']}, id: {t['id']})")
+        lines.append(_wrap(f"[{t['priority']}] {t['title']} (project: {t['project_name']}, id: {t['id']})"))
+        if t.get("rationale"):
+            lines.append(_wrap(f"Why: {t['rationale']}", indent="    "))
     return "\n".join(lines)
 
 
@@ -162,7 +180,7 @@ def logbook_blocked() -> str:
     lines = ["Blocked tasks:"]
     for bt in data:
         blockers = ", ".join(f"{b['title']} ({b['status']})" for b in bt["blocked_by"])
-        lines.append(f"  {bt['title']} — waiting on: {blockers}")
+        lines.append(_wrap(f"{bt['title']} — waiting on: {blockers}"))
     return "\n".join(lines)
 
 
@@ -237,7 +255,7 @@ def logbook_log_list(
     for e in entries:
         time = _to_local_time(e["created_at"])
         project_note = f" [project: {e['project_id'][:12]}]" if e.get("project_id") else ""
-        lines.append(f"  {time} — {e['description']}{project_note}")
+        lines.append(_wrap(f"{time} — {e['description']}{project_note}"))
     return "\n".join(lines)
 
 
@@ -252,20 +270,24 @@ def logbook_projects() -> str:
         return "No active projects."
     lines = []
     for p in projects:
-        lines.append(f"  {p['name']} (id: {p['id']}, status: {p['status']})")
+        lines.append(_wrap(f"{p['name']} (id: {p['id']}, status: {p['status']})"))
     return "\n".join(lines)
 
 
 @mcp.tool()
-def logbook_project_create(name: str, description: str = "") -> str:
+def logbook_project_create(name: str, description: str = "", motivation: str = "") -> str:
     """Create a new project.
 
     Args:
         name: Project name
         description: Optional project description
+        motivation: Why does this project exist? What problem does it solve?
     """
-    data = _post("/projects", {"name": name, "description": description})["data"]
-    return f"Created project: {data['name']} (id: {data['id']})"
+    data = _post("/projects", {"name": name, "description": description, "motivation": motivation})["data"]
+    result = f"Created project: {data['name']} (id: {data['id']})"
+    if not motivation:
+        result += "\n\n→ No motivation provided. Why does this project exist? Call logbook_project_detail to update, or recreate with motivation= to record it."
+    return result
 
 
 @mcp.tool()
@@ -276,12 +298,17 @@ def logbook_project_detail(project_id: str) -> str:
         project_id: The project ID
     """
     data = _get(f"/projects/{project_id}")["data"]
+    motivation = data.get("motivation", "")
     counts = data.get("counts", {})
-    return (f"Project: {data['name']} ({data['status']})\n"
-            f"  {data.get('description', '')}\n"
-            f"  Goals: {counts.get('goals', 0)}\n"
-            f"  Tasks: {counts.get('tasks_todo', 0)} todo, {counts.get('tasks_in_progress', 0)} active, "
-            f"{counts.get('tasks_done', 0)} done")
+    lines = [f"Project: {data['name']} ({data['status']})"]
+    if data.get("description"):
+        lines.append(_wrap(data['description']))
+    if motivation:
+        lines.append(_wrap(f"Motivation: {motivation}"))
+    lines.append(_wrap(f"Goals: {counts.get('goals', 0)}"))
+    lines.append(_wrap(f"Tasks: {counts.get('tasks_todo', 0)} todo, {counts.get('tasks_in_progress', 0)} active, "
+                       f"{counts.get('tasks_done', 0)} done"))
+    return "\n".join(lines)
 
 
 # --- Task tools ---
@@ -318,8 +345,7 @@ def logbook_tasks(
     lines = []
     for t in tasks:
         pname = t.get("project_name", "")
-        prefix = f"  [{t['priority']}]"
-        lines.append(f"{prefix} {t['title']} — {t['status']} (id: {t['id']}, project: {pname})")
+        lines.append(_wrap(f"[{t['priority']}] {t['title']} — {t['status']} (id: {t['id']}, project: {pname})"))
     return "\n".join(lines)
 
 
@@ -328,6 +354,7 @@ def logbook_task_create(
     project_id: str,
     title: str,
     description: str = "",
+    rationale: str = "",
     priority: str = "medium",
     goal_id: str | None = None,
     blocked_by: list[str] | None = None,
@@ -338,18 +365,22 @@ def logbook_task_create(
         project_id: Project ID this task belongs to
         title: Task title
         description: Task description
+        rationale: Why is this task needed? What triggered it?
         priority: Priority level (low, medium, high, critical)
         goal_id: Optional goal ID to link this task to
         blocked_by: Optional list of task IDs that block this task
     """
-    body: dict = {"title": title, "description": description, "priority": priority}
+    body: dict = {"title": title, "description": description, "rationale": rationale, "priority": priority}
     if goal_id:
         body["goal_id"] = goal_id
     if blocked_by:
         body["blocked_by"] = blocked_by
 
     data = _post(f"/projects/{project_id}/tasks", body)["data"]
-    return f"Created task: {data['title']} (id: {data['id']}, priority: {data['priority']})"
+    result = f"Created task: {data['title']} (id: {data['id']}, priority: {data['priority']})"
+    if not rationale:
+        result += "\n\n→ No rationale provided. Why is this task needed? What triggered it?"
+    return result
 
 
 @mcp.tool()
@@ -390,21 +421,23 @@ def logbook_task_detail(task_id: str) -> str:
     pname = data.get("project_name", "")
     lines = [f"Task: {data['title']} [{data['status']}] (priority: {data['priority']}, project: {pname})"]
     if data.get("description"):
-        lines.append(f"  {data['description']}")
+        lines.append(_wrap(data['description']))
+    if data.get("rationale"):
+        lines.append(_wrap(f"Rationale: {data['rationale']}"))
     if data.get("is_blocked"):
         lines.append("  STATUS: BLOCKED")
     if data.get("blocked_by"):
         lines.append("  Blocked by:")
         for b in data["blocked_by"]:
-            lines.append(f"    - {b['title']} ({b['status']})")
+            lines.append(_wrap(f"- {b['title']} ({b['status']})", indent="    "))
     if data.get("blocks"):
         lines.append("  Blocks:")
         for b in data["blocks"]:
-            lines.append(f"    - {b['title']} ({b['status']})")
+            lines.append(_wrap(f"- {b['title']} ({b['status']})", indent="    "))
     if data.get("recent_log_entries"):
         lines.append("  Recent work:")
         for e in data["recent_log_entries"]:
-            lines.append(f"    - {e['description']}")
+            lines.append(_wrap(f"- {e['description']}", indent="    "))
     return "\n".join(lines)
 
 
@@ -415,6 +448,7 @@ def logbook_goal_create(
     project_id: str,
     title: str,
     description: str = "",
+    motivation: str = "",
     target_date: str | None = None,
 ) -> str:
     """Create a new goal/milestone within a project.
@@ -423,13 +457,17 @@ def logbook_goal_create(
         project_id: Project ID
         title: Goal title
         description: Goal description
+        motivation: Why is this goal important? What does success look like?
         target_date: Optional target date (YYYY-MM-DD)
     """
-    body: dict = {"title": title, "description": description}
+    body: dict = {"title": title, "description": description, "motivation": motivation}
     if target_date:
         body["target_date"] = target_date
     data = _post(f"/projects/{project_id}/goals", body)["data"]
-    return f"Created goal: {data['title']} (id: {data['id']})"
+    result = f"Created goal: {data['title']} (id: {data['id']})"
+    if not motivation:
+        result += "\n\n→ No motivation provided. Why is this goal important? What does achieving it unlock?"
+    return result
 
 
 @mcp.tool()
@@ -446,7 +484,7 @@ def logbook_goals(project_id: str) -> str:
     lines = []
     for g in goals:
         target = f" (target: {g['target_date']})" if g.get("target_date") else ""
-        lines.append(f"  {g['title']} — {g['status']}{target} (id: {g['id']})")
+        lines.append(_wrap(f"{g['title']} — {g['status']}{target} (id: {g['id']})"))
     return "\n".join(lines)
 
 
@@ -480,9 +518,9 @@ def logbook_search(
     lines = [f"Search results for '{query}' ({data['total']} matches):"]
     for r in results:
         label = r["entity_type"].replace("_", " ")
-        lines.append(f"  [{label}] {r['title_snippet']} (id: {r['entity_id']})")
+        lines.append(_wrap(f"[{label}] {r['title_snippet']} (id: {r['entity_id']})"))
         if r["body_snippet"].strip():
-            lines.append(f"    {r['body_snippet']}")
+            lines.append(_wrap(r['body_snippet'], indent="    "))
     return "\n".join(lines)
 
 

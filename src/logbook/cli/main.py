@@ -5,6 +5,7 @@ import sys
 import httpx
 import typer
 from rich.console import Console
+from rich.padding import Padding
 from rich.table import Table
 
 app = typer.Typer(name="logbook", help="Local-first agentic work journal and planning tool")
@@ -25,6 +26,11 @@ def _handle_error(resp: httpx.Response):
             detail = resp.text
         console.print(f"[red]Error ({resp.status_code}):[/red] {detail}")
         raise typer.Exit(1)
+
+
+def _indent(text, left: int = 2):
+    """Print text with left padding that persists across line wraps."""
+    console.print(Padding(text, (0, 0, 0, left)))
 
 
 def _json_or_table(data, json_flag: bool, table_fn):
@@ -76,10 +82,11 @@ app.add_typer(project_app, name="project")
 def project_create(
     name: str = typer.Argument(...),
     desc: str = typer.Option("", "--desc"),
+    motivation: str = typer.Option("", "--motivation", "-m", help="Why does this project exist?"),
     json_out: bool = typer.Option(False, "--json"),
 ):
     with _client() as c:
-        resp = c.post("/projects", json={"name": name, "description": desc})
+        resp = c.post("/projects", json={"name": name, "description": desc, "motivation": motivation})
         _handle_error(resp)
         data = resp.json()["data"]
 
@@ -104,10 +111,12 @@ def project_show(
     else:
         console.print(f"[bold]{data['name']}[/bold] ({data['status']})")
         if data.get("description"):
-            console.print(f"  {data['description']}")
+                _indent(data['description'])
+        if data.get("motivation"):
+            _indent(f"[italic]Motivation:[/italic] {data['motivation']}")
         if data.get("counts"):
             c = data["counts"]
-            console.print(f"  Goals: {c['goals']}  |  Tasks: {c['tasks_todo']} todo, {c['tasks_in_progress']} active, {c['tasks_done']} done")
+            _indent(f"Goals: {c['goals']}  |  Tasks: {c['tasks_todo']} todo, {c['tasks_in_progress']} active, {c['tasks_done']} done")
 
 
 @project_app.command("archive")
@@ -162,11 +171,12 @@ def goal_create(
     project: str = typer.Argument(..., help="Project ID"),
     title: str = typer.Argument(...),
     desc: str = typer.Option("", "--desc"),
+    motivation: str = typer.Option("", "--motivation", "-m", help="Why is this goal important?"),
     target: str = typer.Option(None, "--target", help="Target date (YYYY-MM-DD)"),
     json_out: bool = typer.Option(False, "--json"),
 ):
     with _client() as c:
-        body = {"title": title, "description": desc}
+        body = {"title": title, "description": desc, "motivation": motivation}
         if target:
             body["target_date"] = target
         resp = c.post(f"/projects/{project}/goals", json=body)
@@ -191,9 +201,11 @@ def goal_show(id: str = typer.Argument(...), json_out: bool = typer.Option(False
     else:
         console.print(f"[bold]{data['title']}[/bold] ({data['status']})")
         if data.get("description"):
-            console.print(f"  {data['description']}")
+                _indent(data['description'])
+        if data.get("motivation"):
+            _indent(f"[italic]Motivation:[/italic] {data['motivation']}")
         if data.get("target_date"):
-            console.print(f"  Target: {data['target_date']}")
+            _indent(f"Target: {data['target_date']}")
 
 
 @goal_app.command("complete")
@@ -255,12 +267,13 @@ def task_create(
     project: str = typer.Argument(..., help="Project ID"),
     title: str = typer.Argument(...),
     desc: str = typer.Option("", "--desc"),
+    rationale: str = typer.Option("", "--rationale", "-r", help="Why is this task needed?"),
     priority: str = typer.Option("medium", "--priority"),
     goal: str = typer.Option(None, "--goal", help="Goal ID"),
     blocked_by: str = typer.Option(None, "--blocked-by", help="Comma-separated blocker task IDs"),
     json_out: bool = typer.Option(False, "--json"),
 ):
-    body = {"title": title, "description": desc, "priority": priority}
+    body = {"title": title, "description": desc, "rationale": rationale, "priority": priority}
     if goal:
         body["goal_id"] = goal
     if blocked_by:
@@ -291,17 +304,19 @@ def task_show(id: str = typer.Argument(...), json_out: bool = typer.Option(False
         pname = data.get("project_name", "")
         console.print(f"[bold]{data['title']}[/bold] [{data['status']}] {data['priority']}{blocked_marker}")
         if pname:
-            console.print(f"  Project: [cyan]{pname}[/cyan]")
+            _indent(f"Project: [cyan]{pname}[/cyan]")
         if data.get("description"):
-            console.print(f"  {data['description']}")
+            _indent(data['description'])
+        if data.get("rationale"):
+            _indent(f"[italic]Rationale:[/italic] {data['rationale']}")
         if data.get("blocked_by"):
-            console.print("  [red]Blocked by:[/red]")
+            _indent("[red]Blocked by:[/red]")
             for b in data["blocked_by"]:
-                console.print(f"    - {b['title']} ({b['status']})")
+                _indent(f"- {b['title']} ({b['status']})", left=4)
         if data.get("blocks"):
-            console.print("  [yellow]Blocks:[/yellow]")
+            _indent("[yellow]Blocks:[/yellow]")
             for b in data["blocks"]:
-                console.print(f"    - {b['title']} ({b['status']})")
+                _indent(f"- {b['title']} ({b['status']})", left=4)
 
 
 @task_app.command("start")
@@ -383,22 +398,24 @@ def summary(json_out: bool = typer.Option(False, "--json")):
     console.print()
     for p in data.get("active_projects", []):
         ts = p["tasks_summary"]
-        console.print(f"  [bold]{p['name']}[/bold] — {p['goals_active']} goals, "
-                      f"{ts.get('todo', 0)} todo, {ts.get('in_progress', 0)} active, "
-                      f"{ts.get('done', 0)} done, {p['blocked_tasks']} blocked")
+        _indent(f"[bold]{p['name']}[/bold] — {p['goals_active']} goals, "
+                f"{ts.get('todo', 0)} todo, {ts.get('in_progress', 0)} active, "
+                f"{ts.get('done', 0)} done, {p['blocked_tasks']} blocked")
+        if p.get("motivation"):
+            _indent(f"[dim]{p['motivation']}[/dim]", left=4)
 
     if data.get("next_actions"):
         console.print()
         console.print("[bold]Next up:[/bold]")
         for n in data["next_actions"][:5]:
-            console.print(f"  [{n['priority']}] {n['title']} ({n['project_name']})")
+            _indent(f"[{n['priority']}] {n['title']} ({n['project_name']})")
 
     if data.get("blocked_tasks"):
         console.print()
         console.print("[bold red]Blocked:[/bold red]")
         for bt in data["blocked_tasks"]:
             blockers = ", ".join(b["title"] for b in bt["blocked_by"])
-            console.print(f"  {bt['title']} — waiting on: {blockers}")
+            _indent(f"{bt['title']} — waiting on: {blockers}")
 
 
 @app.command("today")
@@ -417,15 +434,21 @@ def today(json_out: bool = typer.Option(False, "--json")):
         console.print()
         for e in data["log_entries"]:
             time = e["created_at"][11:16] if len(e["created_at"]) > 16 else ""
-            console.print(f"  [dim]{time}[/dim] {e['description']}")
+            _indent(f"[dim]{time}[/dim] {e['description']}")
     else:
-        console.print("  No activity logged today.")
+        _indent("No activity logged today.")
 
     if data.get("tasks_completed"):
         console.print()
         console.print("[green]Completed:[/green]")
+        by_proj: dict[str, list] = {}
         for t in data["tasks_completed"]:
-            console.print(f"  ✓ {t['title']}")
+            pname = t.get("project_name", "Unknown")
+            by_proj.setdefault(pname, []).append(t)
+        for pname, tasks in by_proj.items():
+            _indent(f"[bold]{pname}[/bold]")
+            for t in tasks:
+                _indent(f"✓ {t['title']}", left=4)
 
 
 @app.command("next")
@@ -443,9 +466,11 @@ def next_actions(json_out: bool = typer.Option(False, "--json")):
     if data.get("tasks"):
         for t in data["tasks"]:
             pstyle = {"critical": "red bold", "high": "red", "medium": "yellow", "low": "dim"}.get(t["priority"], "")
-            console.print(f"  [{pstyle}]{t['priority']}[/{pstyle}] {t['title']} ({t['project_name']})")
+            _indent(f"[{pstyle}]{t['priority']}[/{pstyle}] {t['title']} ({t['project_name']})")
+            if t.get("rationale"):
+                _indent(f"[dim]{t['rationale']}[/dim]", left=4)
     else:
-        console.print("  Nothing queued up.")
+        _indent("Nothing queued up.")
 
 
 @app.command("weekly")
@@ -467,36 +492,39 @@ def weekly_report(
         return
 
     console.print(f"[bold]Weekly Report[/bold] ({data['week_start'][:10]} → {data['week_end'][:10]})")
-    console.print(f"  {data['total_log_entries']} entries | "
-                  f"{data['total_tasks_completed']} tasks completed | "
-                  f"{data['total_tasks_created']} tasks created | "
-                  f"{data['total_goals_completed']} goals completed")
+    _indent(f"{data['total_log_entries']} entries | "
+            f"{data['total_tasks_completed']} tasks completed | "
+            f"{data['total_tasks_created']} tasks created | "
+            f"{data['total_goals_completed']} goals completed")
 
     if data.get("by_project"):
         console.print()
         console.print("[bold]By project:[/bold]")
-        for p in data["by_project"]:
-            console.print(f"  [bold]{p['project_name']}[/bold] — {p['entry_count']} entries")
+        for i, p in enumerate(data["by_project"]):
+            if i > 0:
+                console.print()
+            _indent(f"[bold]{p['project_name']}[/bold] — {p['entry_count']} entries")
+            if p.get("project_motivation"):
+                _indent(f"[dim]{p['project_motivation']}[/dim]", left=4)
             for e in p["entries"]:
                 time = e["created_at"][11:16] if len(e["created_at"]) > 16 else ""
                 day = e["created_at"][:10]
-                console.print(f"    [dim]{day} {time}[/dim] {e['description']}")
+                _indent(f"[dim]{day} {time}[/dim] {e['description']}", left=4)
 
     if data.get("tasks_completed"):
         console.print()
         console.print("[green]Tasks completed:[/green]")
-        # Group by project
         by_proj: dict[str, list] = {}
         for t in data["tasks_completed"]:
             pname = t.get("project_name", "Unknown")
             by_proj.setdefault(pname, []).append(t)
         for pname, tasks in by_proj.items():
-            console.print(f"  [bold]{pname}[/bold]")
+            _indent(f"[bold]{pname}[/bold]")
             for t in tasks:
-                console.print(f"    ✓ {t['title']}")
+                _indent(f"✓ {t['title']}", left=4)
 
     if not data.get("by_project") and not data.get("tasks_completed"):
-        console.print("  No activity this week.")
+        _indent("No activity this week.")
 
 
 @app.command("export")
@@ -539,7 +567,7 @@ def blocked_tasks(json_out: bool = typer.Option(False, "--json")):
     console.print("[bold red]Blocked tasks[/bold red]")
     for bt in data:
         blockers = ", ".join(b["title"] for b in bt["blocked_by"])
-        console.print(f"  {bt['title']} — waiting on: {blockers}")
+        _indent(f"{bt['title']} — waiting on: {blockers}")
 
 
 @app.command("restart")
@@ -600,10 +628,10 @@ def search_cmd(
         label = r["entity_type"].replace("_", " ")
         title = r["title_snippet"].replace(">>>", "[bold]").replace("<<<", "[/bold]")
         body = r["body_snippet"].replace(">>>", "[bold]").replace("<<<", "[/bold]")
-        console.print(f"  [{style}]{label}[/{style}] {title}")
+        _indent(f"[{style}]{label}[/{style}] {title}")
         if body.strip():
-            console.print(f"    [dim]{body}[/dim]")
-        console.print(f"    [dim]id: {r['entity_id']}[/dim]")
+            _indent(f"[dim]{body}[/dim]", left=4)
+        _indent(f"[dim]id: {r['entity_id']}[/dim]", left=4)
         console.print()
 
 

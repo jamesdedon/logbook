@@ -97,8 +97,9 @@ async def get_today(db: AsyncSession = Depends(get_db)):
                 id=t.id, project_id=t.project_id,
                 project_name=pname_cache.get(t.project_id, "Unknown"),
                 goal_id=t.goal_id,
-                title=t.title, description=t.description, status=t.status,
-                priority=t.priority, created_at=_to_local(t.created_at), updated_at=t.updated_at,
+                title=t.title, description=t.description, rationale=t.rationale,
+                status=t.status, priority=t.priority,
+                created_at=_to_local(t.created_at), updated_at=t.updated_at,
                 completed_at=t.completed_at,
             )
             for t in data["tasks_completed"]
@@ -134,8 +135,9 @@ async def get_weekly(weeks_back: int = 0, project_id: str | None = None, db: Asy
         return TaskOut(
             id=t.id, project_id=t.project_id, project_name=pname,
             goal_id=t.goal_id,
-            title=t.title, description=t.description, status=t.status,
-            priority=t.priority, created_at=t.created_at, updated_at=t.updated_at,
+            title=t.title, description=t.description, rationale=t.rationale,
+            status=t.status, priority=t.priority,
+            created_at=t.created_at, updated_at=t.updated_at,
             completed_at=t.completed_at,
         )
 
@@ -147,6 +149,7 @@ async def get_weekly(weeks_back: int = 0, project_id: str | None = None, db: Asy
     by_project = [
         ProjectWeekSummary(
             project_id=pid, project_name=data["project_names"].get(pid, "unknown"),
+            project_motivation=data["project_motivations"].get(pid, ""),
             entry_count=len(entries), entries=[_entry_out(e) for e in entries],
         )
         for pid, entries in data["by_project"].items()
