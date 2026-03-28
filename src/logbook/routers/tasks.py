@@ -15,6 +15,7 @@ from logbook.schemas import (
     TaskOut,
     TaskUpdate,
 )
+from logbook.models import Project
 from logbook.services import projects as project_svc
 from logbook.services import tasks as svc
 
@@ -31,9 +32,12 @@ async def _task_to_out(db: AsyncSession, task_id: str) -> TaskOut:
     is_blocked = await svc.is_task_blocked(db, task_id)
     log_entries = await svc.get_recent_log_entries(db, task_id)
     tags = await project_svc.get_tags(db, "task", task_id)
+    project = await db.get(Project, task.project_id)
+    project_name = project.name if project else "Unknown"
 
     return TaskOut(
-        id=task.id, project_id=task.project_id, goal_id=task.goal_id,
+        id=task.id, project_id=task.project_id, project_name=project_name,
+        goal_id=task.goal_id,
         title=task.title, description=task.description, status=task.status,
         priority=task.priority, tags=tags,
         blocked_by=[TaskDepRef(id=b.id, title=b.title, status=b.status) for b in blockers],
@@ -75,11 +79,18 @@ async def list_tasks(
         priority=priority, blocked=blocked, tag=tag, q=q, sort=sort,
         limit=limit, offset=offset,
     )
+    # Batch-resolve project names
+    pname_cache: dict[str, str] = {}
+    for t in tasks:
+        if t.project_id not in pname_cache:
+            p = await db.get(Project, t.project_id)
+            pname_cache[t.project_id] = p.name if p else "Unknown"
     items = []
     for t in tasks:
         tags = await project_svc.get_tags(db, "task", t.id)
         items.append(TaskOut(
-            id=t.id, project_id=t.project_id, goal_id=t.goal_id,
+            id=t.id, project_id=t.project_id, project_name=pname_cache[t.project_id],
+            goal_id=t.goal_id,
             title=t.title, description=t.description, status=t.status,
             priority=t.priority, tags=tags,
             created_at=t.created_at, updated_at=t.updated_at, completed_at=t.completed_at,
@@ -100,11 +111,14 @@ async def list_project_tasks(
         db, project_id=project_id, status=status, priority=priority,
         limit=limit, offset=offset,
     )
+    project = await db.get(Project, project_id)
+    pname = project.name if project else "Unknown"
     items = []
     for t in tasks:
         tags = await project_svc.get_tags(db, "task", t.id)
         items.append(TaskOut(
-            id=t.id, project_id=t.project_id, goal_id=t.goal_id,
+            id=t.id, project_id=t.project_id, project_name=pname,
+            goal_id=t.goal_id,
             title=t.title, description=t.description, status=t.status,
             priority=t.priority, tags=tags,
             created_at=t.created_at, updated_at=t.updated_at, completed_at=t.completed_at,

@@ -234,12 +234,13 @@ def list_tasks(
     def show(d):
         table = Table(title="Tasks")
         table.add_column("ID", style="dim", max_width=12)
+        table.add_column("Project", style="cyan")
         table.add_column("Title", style="bold")
         table.add_column("Status")
         table.add_column("Priority")
         for t in d["data"]:
             pstyle = {"critical": "red bold", "high": "red", "medium": "yellow", "low": "dim"}.get(t["priority"], "")
-            table.add_row(t["id"][:12], t["title"], t["status"], f"[{pstyle}]{t['priority']}[/{pstyle}]")
+            table.add_row(t["id"][:12], t.get("project_name", ""), t["title"], t["status"], f"[{pstyle}]{t['priority']}[/{pstyle}]")
         console.print(table)
 
     _json_or_table(data, json_out, show)
@@ -287,7 +288,10 @@ def task_show(id: str = typer.Argument(...), json_out: bool = typer.Option(False
         console.print_json(json.dumps(data))
     else:
         blocked_marker = " [red](BLOCKED)[/red]" if data.get("is_blocked") else ""
+        pname = data.get("project_name", "")
         console.print(f"[bold]{data['title']}[/bold] [{data['status']}] {data['priority']}{blocked_marker}")
+        if pname:
+            console.print(f"  Project: [cyan]{pname}[/cyan]")
         if data.get("description"):
             console.print(f"  {data['description']}")
         if data.get("blocked_by"):
@@ -481,8 +485,15 @@ def weekly_report(
     if data.get("tasks_completed"):
         console.print()
         console.print("[green]Tasks completed:[/green]")
+        # Group by project
+        by_proj: dict[str, list] = {}
         for t in data["tasks_completed"]:
-            console.print(f"  ✓ {t['title']}")
+            pname = t.get("project_name", "Unknown")
+            by_proj.setdefault(pname, []).append(t)
+        for pname, tasks in by_proj.items():
+            console.print(f"  [bold]{pname}[/bold]")
+            for t in tasks:
+                console.print(f"    ✓ {t['title']}")
 
     if not data.get("by_project") and not data.get("tasks_completed"):
         console.print("  No activity this week.")

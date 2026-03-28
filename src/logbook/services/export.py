@@ -67,23 +67,39 @@ def _render_weekly_markdown(data: dict) -> str:
                 lines.append(f"- {time} — {entry.description}")
             lines.append("")
 
-    # Tasks completed
+    # Tasks completed (grouped by project)
     if data["tasks_completed"]:
         lines.append("## Tasks Completed")
         lines.append("")
+        completed_by_project: dict[str, list] = {}
         for task in data["tasks_completed"]:
-            completed = task.completed_at[:10] if task.completed_at else ""
-            lines.append(f"- [x] {task.title} ({task.priority}) — completed {completed}")
-        lines.append("")
+            pid = task.project_id or "unlinked"
+            completed_by_project.setdefault(pid, []).append(task)
+        for pid, tasks in completed_by_project.items():
+            pname = data["project_names"].get(pid, "Unknown")
+            lines.append(f"### {pname}")
+            lines.append("")
+            for task in tasks:
+                completed = task.completed_at[:10] if task.completed_at else ""
+                lines.append(f"- [x] {task.title} ({task.priority}) — completed {completed}")
+            lines.append("")
 
-    # Tasks created
+    # Tasks created (grouped by project)
     if data["tasks_created"]:
         lines.append("## Tasks Created")
         lines.append("")
+        created_by_project: dict[str, list] = {}
         for task in data["tasks_created"]:
-            status_marker = "x" if task.status == "done" else " "
-            lines.append(f"- [{status_marker}] {task.title} ({task.priority}) — {task.status}")
-        lines.append("")
+            pid = task.project_id or "unlinked"
+            created_by_project.setdefault(pid, []).append(task)
+        for pid, tasks in created_by_project.items():
+            pname = data["project_names"].get(pid, "Unknown")
+            lines.append(f"### {pname}")
+            lines.append("")
+            for task in tasks:
+                status_marker = "x" if task.status == "done" else " "
+                lines.append(f"- [{status_marker}] {task.title} ({task.priority}) — {task.status}")
+            lines.append("")
 
     # Goals completed
     if data["goals_completed"]:

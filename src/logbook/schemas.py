@@ -125,6 +125,7 @@ class LogEntryBrief(BaseModel):
 class TaskOut(BaseModel):
     id: str
     project_id: str
+    project_name: str = ""
     goal_id: str | None
     title: str
     description: str

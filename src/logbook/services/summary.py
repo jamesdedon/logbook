@@ -214,14 +214,22 @@ async def get_weekly_report(db: AsyncSession, weeks_back: int = 0, project_id: s
         pid = entry.project_id or "unlinked"
         by_project.setdefault(pid, []).append(entry)
 
-    # Resolve project names
+    # Resolve project names (from log entries + tasks)
+    all_project_ids = set(by_project.keys())
+    for t in tasks_completed:
+        if t.project_id:
+            all_project_ids.add(t.project_id)
+    for t in tasks_created:
+        if t.project_id:
+            all_project_ids.add(t.project_id)
+    all_project_ids.discard("unlinked")
+
     project_names = {}
-    for pid in by_project:
-        if pid != "unlinked":
-            proj = await db.get(Project, pid)
-            project_names[pid] = proj.name if proj else "unknown"
-        else:
-            project_names[pid] = "Unlinked"
+    for pid in all_project_ids:
+        proj = await db.get(Project, pid)
+        project_names[pid] = proj.name if proj else "unknown"
+    if "unlinked" in by_project:
+        project_names["unlinked"] = "Unlinked"
 
     return {
         "week_start": week_start_iso,

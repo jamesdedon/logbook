@@ -23,6 +23,7 @@ from logbook.schemas import (
     WeeklyReportOut,
     WorkLogOut,
 )
+from logbook.models import Project
 from logbook.services import summary as svc
 from logbook.services.export import export_weekly_markdown
 
@@ -73,6 +74,13 @@ async def get_today(db: AsyncSession = Depends(get_db)):
     data = await svc.get_today(db)
     now = datetime.now(timezone.utc).isoformat()
 
+    # Resolve project names for completed tasks
+    pname_cache: dict[str, str] = {}
+    for t in data["tasks_completed"]:
+        if t.project_id and t.project_id not in pname_cache:
+            p = await db.get(Project, t.project_id)
+            pname_cache[t.project_id] = p.name if p else "Unknown"
+
     return ItemResponse(data=TodayOut(
         generated_at=now,
         log_entries=[
@@ -86,7 +94,9 @@ async def get_today(db: AsyncSession = Depends(get_db)):
         ],
         tasks_completed=[
             TaskOut(
-                id=t.id, project_id=t.project_id, goal_id=t.goal_id,
+                id=t.id, project_id=t.project_id,
+                project_name=pname_cache.get(t.project_id, "Unknown"),
+                goal_id=t.goal_id,
                 title=t.title, description=t.description, status=t.status,
                 priority=t.priority, created_at=_to_local(t.created_at), updated_at=t.updated_at,
                 completed_at=t.completed_at,
@@ -120,8 +130,10 @@ async def get_weekly(weeks_back: int = 0, project_id: str | None = None, db: Asy
         )
 
     def _task_out(t):
+        pname = data["project_names"].get(t.project_id, "Unknown")
         return TaskOut(
-            id=t.id, project_id=t.project_id, goal_id=t.goal_id,
+            id=t.id, project_id=t.project_id, project_name=pname,
+            goal_id=t.goal_id,
             title=t.title, description=t.description, status=t.status,
             priority=t.priority, created_at=t.created_at, updated_at=t.updated_at,
             completed_at=t.completed_at,

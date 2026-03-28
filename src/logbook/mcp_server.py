@@ -103,8 +103,14 @@ def logbook_weekly(weeks_back: int = 0, project_id: str | None = None) -> str:
 
     if data.get("tasks_completed"):
         lines.append("\nTasks completed:")
+        by_proj: dict[str, list] = {}
         for t in data["tasks_completed"]:
-            lines.append(f"  ✓ {t['title']}")
+            pname = t.get("project_name", "Unknown")
+            by_proj.setdefault(pname, []).append(t)
+        for pname, tasks in by_proj.items():
+            lines.append(f"  {pname}")
+            for t in tasks:
+                lines.append(f"    ✓ {t['title']}")
 
     if not data.get("by_project") and not data.get("tasks_completed"):
         lines.append("  No activity this week.")
@@ -124,8 +130,14 @@ def logbook_today() -> str:
             lines.append(f"  {time} — {e['description']}")
     if data.get("tasks_completed"):
         lines.append("\nTasks completed today:")
+        by_proj: dict[str, list] = {}
         for t in data["tasks_completed"]:
-            lines.append(f"  ✓ {t['title']}")
+            pname = t.get("project_name", "Unknown")
+            by_proj.setdefault(pname, []).append(t)
+        for pname, tasks in by_proj.items():
+            lines.append(f"  {pname}")
+            for t in tasks:
+                lines.append(f"    ✓ {t['title']}")
     return "\n".join(lines) if lines else "No activity logged today."
 
 
@@ -305,7 +317,9 @@ def logbook_tasks(
         return "No tasks found."
     lines = []
     for t in tasks:
-        lines.append(f"  [{t['priority']}] {t['title']} — {t['status']} (id: {t['id']})")
+        pname = t.get("project_name", "")
+        prefix = f"  [{t['priority']}]"
+        lines.append(f"{prefix} {t['title']} — {t['status']} (id: {t['id']}, project: {pname})")
     return "\n".join(lines)
 
 
@@ -373,7 +387,8 @@ def logbook_task_detail(task_id: str) -> str:
         task_id: The task ID
     """
     data = _get(f"/tasks/{task_id}")["data"]
-    lines = [f"Task: {data['title']} [{data['status']}] (priority: {data['priority']})"]
+    pname = data.get("project_name", "")
+    lines = [f"Task: {data['title']} [{data['status']}] (priority: {data['priority']}, project: {pname})"]
     if data.get("description"):
         lines.append(f"  {data['description']}")
     if data.get("is_blocked"):
