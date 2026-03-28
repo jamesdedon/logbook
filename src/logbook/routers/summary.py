@@ -1,0 +1,152 @@
+import json
+from datetime import datetime, timezone
+
+from fastapi import APIRouter, Depends
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from logbook.database import get_db
+from logbook.schemas import (
+    BlockedTaskOut,
+    DaySummary,
+    ItemResponse,
+    NextAction,
+    NextOut,
+    ProjectSummary,
+    ProjectWeekSummary,
+    SummaryOut,
+    TaskDepRef,
+    TaskOut,
+    TodayOut,
+    WeeklyReportOut,
+    WorkLogOut,
+)
+from logbook.services import summary as svc
+
+router = APIRouter(prefix="/summary", tags=["summary"])
+
+
+@router.get("", response_model=ItemResponse)
+async def get_summary(db: AsyncSession = Depends(get_db)):
+    data = await svc.get_summary(db)
+    now = datetime.now(timezone.utc).isoformat()
+
+    return ItemResponse(data=SummaryOut(
+        generated_at=now,
+        active_projects=[ProjectSummary(**p) for p in data["active_projects"]],
+        recent_activity=[
+            WorkLogOut(
+                id=e.id, project_id=e.project_id, task_id=e.task_id,
+                description=e.description,
+                metadata=json.loads(e.metadata_json) if e.metadata_json else {},
+                created_at=e.created_at,
+            )
+            for e in data["recent_activity"]
+        ],
+        blocked_tasks=[
+            BlockedTaskOut(
+                id=bt["id"], title=bt["title"], project_id=bt["project_id"],
+                blocked_by=[TaskDepRef(**b) for b in bt["blocked_by"]],
+            )
+            for bt in data["blocked_tasks"]
+        ],
+        next_actions=[NextAction(**n) for n in data["next_actions"]],
+    ))
+
+
+@router.get("/today", response_model=ItemResponse)
+async def get_today(db: AsyncSession = Depends(get_db)):
+    data = await svc.get_today(db)
+    now = datetime.now(timezone.utc).isoformat()
+
+    return ItemResponse(data=TodayOut(
+        generated_at=now,
+        log_entries=[
+            WorkLogOut(
+                id=e.id, project_id=e.project_id, task_id=e.task_id,
+                description=e.description,
+                metadata=json.loads(e.metadata_json) if e.metadata_json else {},
+                created_at=e.created_at,
+            )
+            for e in data["log_entries"]
+        ],
+        tasks_completed=[
+            TaskOut(
+                id=t.id, project_id=t.project_id, goal_id=t.goal_id,
+                title=t.title, description=t.description, status=t.status,
+                priority=t.priority, created_at=t.created_at, updated_at=t.updated_at,
+                completed_at=t.completed_at,
+            )
+            for t in data["tasks_completed"]
+        ],
+    ))
+
+
+@router.get("/next", response_model=ItemResponse)
+async def get_next(db: AsyncSession = Depends(get_db)):
+    next_actions = await svc.get_next_actions(db)
+    now = datetime.now(timezone.utc).isoformat()
+    return ItemResponse(data=NextOut(
+        generated_at=now,
+        tasks=[NextAction(**n) for n in next_actions],
+    ))
+
+
+@router.get("/weekly", response_model=ItemResponse)
+async def get_weekly(weeks_back: int = 0, db: AsyncSession = Depends(get_db)):
+    data = await svc.get_weekly_report(db, weeks_back=weeks_back)
+    now = datetime.now(timezone.utc).isoformat()
+
+    def _entry_out(e):
+        return WorkLogOut(
+            id=e.id, project_id=e.project_id, task_id=e.task_id,
+            description=e.description,
+            metadata=json.loads(e.metadata_json) if e.metadata_json else {},
+            created_at=e.created_at,
+        )
+
+    def _task_out(t):
+        return TaskOut(
+            id=t.id, project_id=t.project_id, goal_id=t.goal_id,
+            title=t.title, description=t.description, status=t.status,
+            priority=t.priority, created_at=t.created_at, updated_at=t.updated_at,
+            completed_at=t.completed_at,
+        )
+
+    days = [
+        DaySummary(date=day, entry_count=len(entries), entries=[_entry_out(e) for e in entries])
+        for day, entries in sorted(data["days"].items())
+    ]
+
+    by_project = [
+        ProjectWeekSummary(
+            project_id=pid, project_name=data["project_names"].get(pid, "unknown"),
+            entry_count=len(entries), entries=[_entry_out(e) for e in entries],
+        )
+        for pid, entries in data["by_project"].items()
+    ]
+
+    return ItemResponse(data=WeeklyReportOut(
+        generated_at=now,
+        week_start=data["week_start"],
+        week_end=data["week_end"],
+        total_log_entries=data["total_log_entries"],
+        total_tasks_completed=data["total_tasks_completed"],
+        total_tasks_created=data["total_tasks_created"],
+        total_goals_completed=data["total_goals_completed"],
+        days=days,
+        by_project=by_project,
+        tasks_completed=[_task_out(t) for t in data["tasks_completed"]],
+        tasks_created=[_task_out(t) for t in data["tasks_created"]],
+    ))
+
+
+@router.get("/blocked", response_model=ItemResponse)
+async def get_blocked(db: AsyncSession = Depends(get_db)):
+    blocked = await svc.get_blocked_tasks(db)
+    return ItemResponse(data=[
+        BlockedTaskOut(
+            id=bt["id"], title=bt["title"], project_id=bt["project_id"],
+            blocked_by=[TaskDepRef(**b) for b in bt["blocked_by"]],
+        )
+        for bt in blocked
+    ])
