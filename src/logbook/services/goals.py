@@ -9,9 +9,10 @@ async def create_goal(
     project_id: str,
     title: str,
     description: str = "",
+    motivation: str = "",
     target_date: str | None = None,
 ) -> Goal:
-    goal = Goal(project_id=project_id, title=title, description=description, target_date=target_date)
+    goal = Goal(project_id=project_id, title=title, description=description, motivation=motivation, target_date=target_date)
     db.add(goal)
     await db.commit()
     await db.refresh(goal)

@@ -38,8 +38,8 @@ async def _task_to_out(db: AsyncSession, task_id: str) -> TaskOut:
     return TaskOut(
         id=task.id, project_id=task.project_id, project_name=project_name,
         goal_id=task.goal_id,
-        title=task.title, description=task.description, status=task.status,
-        priority=task.priority, tags=tags,
+        title=task.title, description=task.description, rationale=task.rationale,
+        status=task.status, priority=task.priority, tags=tags,
         blocked_by=[TaskDepRef(id=b.id, title=b.title, status=b.status) for b in blockers],
         blocks=[TaskDepRef(id=b.id, title=b.title, status=b.status) for b in blockees],
         is_blocked=is_blocked,
@@ -54,7 +54,8 @@ async def _task_to_out(db: AsyncSession, task_id: str) -> TaskOut:
 async def create_task(project_id: str, body: TaskCreate, db: AsyncSession = Depends(get_db)):
     task = await svc.create_task(
         db, project_id=project_id, title=body.title, description=body.description,
-        priority=body.priority, goal_id=body.goal_id, tags=body.tags, blocked_by=body.blocked_by,
+        rationale=body.rationale, priority=body.priority, goal_id=body.goal_id,
+        tags=body.tags, blocked_by=body.blocked_by,
     )
     out = await _task_to_out(db, task.id)
     return ItemResponse(data=out)
@@ -91,8 +92,8 @@ async def list_tasks(
         items.append(TaskOut(
             id=t.id, project_id=t.project_id, project_name=pname_cache[t.project_id],
             goal_id=t.goal_id,
-            title=t.title, description=t.description, status=t.status,
-            priority=t.priority, tags=tags,
+            title=t.title, description=t.description, rationale=t.rationale,
+            status=t.status, priority=t.priority, tags=tags,
             created_at=t.created_at, updated_at=t.updated_at, completed_at=t.completed_at,
         ))
     return ListResponse(data=items, meta=Meta(total=total, limit=limit, offset=offset))
@@ -119,8 +120,8 @@ async def list_project_tasks(
         items.append(TaskOut(
             id=t.id, project_id=t.project_id, project_name=pname,
             goal_id=t.goal_id,
-            title=t.title, description=t.description, status=t.status,
-            priority=t.priority, tags=tags,
+            title=t.title, description=t.description, rationale=t.rationale,
+            status=t.status, priority=t.priority, tags=tags,
             created_at=t.created_at, updated_at=t.updated_at, completed_at=t.completed_at,
         ))
     return ListResponse(data=items, meta=Meta(total=total, limit=limit, offset=offset))

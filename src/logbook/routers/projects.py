@@ -10,11 +10,12 @@ router = APIRouter(prefix="/projects", tags=["projects"])
 
 @router.post("", response_model=ItemResponse)
 async def create_project(body: ProjectCreate, db: AsyncSession = Depends(get_db)):
-    project = await svc.create_project(db, name=body.name, description=body.description, tags=body.tags)
+    project = await svc.create_project(db, name=body.name, description=body.description, motivation=body.motivation, tags=body.tags)
     tags = await svc.get_tags(db, "project", project.id)
     return ItemResponse(data=ProjectOut(
         id=project.id, name=project.name, description=project.description,
-        status=project.status, tags=tags, created_at=project.created_at, updated_at=project.updated_at,
+        motivation=project.motivation, status=project.status, tags=tags,
+        created_at=project.created_at, updated_at=project.updated_at,
     ))
 
 
@@ -26,7 +27,8 @@ async def list_projects(status: str | None = None, db: AsyncSession = Depends(ge
         tags = await svc.get_tags(db, "project", p.id)
         items.append(ProjectOut(
             id=p.id, name=p.name, description=p.description,
-            status=p.status, tags=tags, created_at=p.created_at, updated_at=p.updated_at,
+            motivation=p.motivation, status=p.status, tags=tags,
+            created_at=p.created_at, updated_at=p.updated_at,
         ))
     return ListResponse(data=items, meta=Meta(total=len(items), limit=len(items), offset=0))
 
@@ -40,7 +42,8 @@ async def get_project(project_id: str, db: AsyncSession = Depends(get_db)):
     counts = await svc.get_project_counts(db, project_id)
     return ItemResponse(data=ProjectOut(
         id=project.id, name=project.name, description=project.description,
-        status=project.status, tags=tags, counts=ProjectCounts(**counts),
+        motivation=project.motivation, status=project.status, tags=tags,
+        counts=ProjectCounts(**counts),
         created_at=project.created_at, updated_at=project.updated_at,
     ))
 
@@ -53,7 +56,8 @@ async def update_project(project_id: str, body: ProjectUpdate, db: AsyncSession 
     tags = await svc.get_tags(db, "project", project.id)
     return ItemResponse(data=ProjectOut(
         id=project.id, name=project.name, description=project.description,
-        status=project.status, tags=tags, created_at=project.created_at, updated_at=project.updated_at,
+        motivation=project.motivation, status=project.status, tags=tags,
+        created_at=project.created_at, updated_at=project.updated_at,
     ))
 
 

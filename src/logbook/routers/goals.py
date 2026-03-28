@@ -12,12 +12,14 @@ router = APIRouter(tags=["goals"])
 async def create_goal(project_id: str, body: GoalCreate, db: AsyncSession = Depends(get_db)):
     goal = await svc.create_goal(
         db, project_id=project_id, title=body.title,
-        description=body.description, target_date=body.target_date,
+        description=body.description, motivation=body.motivation,
+        target_date=body.target_date,
     )
     return ItemResponse(data=GoalOut(
         id=goal.id, project_id=goal.project_id, title=goal.title,
-        description=goal.description, status=goal.status,
-        target_date=goal.target_date, created_at=goal.created_at, updated_at=goal.updated_at,
+        description=goal.description, motivation=goal.motivation,
+        status=goal.status, target_date=goal.target_date,
+        created_at=goal.created_at, updated_at=goal.updated_at,
     ))
 
 
@@ -27,8 +29,9 @@ async def list_goals(project_id: str, status: str | None = None, db: AsyncSessio
     items = [
         GoalOut(
             id=g.id, project_id=g.project_id, title=g.title,
-            description=g.description, status=g.status,
-            target_date=g.target_date, created_at=g.created_at, updated_at=g.updated_at,
+            description=g.description, motivation=g.motivation,
+            status=g.status, target_date=g.target_date,
+            created_at=g.created_at, updated_at=g.updated_at,
         )
         for g in goals
     ]
@@ -42,8 +45,9 @@ async def get_goal(goal_id: str, db: AsyncSession = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Goal not found")
     return ItemResponse(data=GoalOut(
         id=goal.id, project_id=goal.project_id, title=goal.title,
-        description=goal.description, status=goal.status,
-        target_date=goal.target_date, created_at=goal.created_at, updated_at=goal.updated_at,
+        description=goal.description, motivation=goal.motivation,
+        status=goal.status, target_date=goal.target_date,
+        created_at=goal.created_at, updated_at=goal.updated_at,
     ))
 
 
@@ -54,8 +58,9 @@ async def update_goal(goal_id: str, body: GoalUpdate, db: AsyncSession = Depends
         raise HTTPException(status_code=404, detail="Goal not found")
     return ItemResponse(data=GoalOut(
         id=goal.id, project_id=goal.project_id, title=goal.title,
-        description=goal.description, status=goal.status,
-        target_date=goal.target_date, created_at=goal.created_at, updated_at=goal.updated_at,
+        description=goal.description, motivation=goal.motivation,
+        status=goal.status, target_date=goal.target_date,
+        created_at=goal.created_at, updated_at=goal.updated_at,
     ))
 
 

@@ -37,12 +37,14 @@ class ErrorResponse(BaseModel):
 class ProjectCreate(BaseModel):
     name: str
     description: str = ""
+    motivation: str = ""
     tags: list[str] = []
 
 
 class ProjectUpdate(BaseModel):
     name: str | None = None
     description: str | None = None
+    motivation: str | None = None
     status: str | None = None
 
 
@@ -58,6 +60,7 @@ class ProjectOut(BaseModel):
     id: str
     name: str
     description: str
+    motivation: str = ""
     status: str
     tags: list[str] = []
     counts: ProjectCounts | None = None
@@ -70,12 +73,14 @@ class ProjectOut(BaseModel):
 class GoalCreate(BaseModel):
     title: str
     description: str = ""
+    motivation: str = ""
     target_date: str | None = None
 
 
 class GoalUpdate(BaseModel):
     title: str | None = None
     description: str | None = None
+    motivation: str | None = None
     status: str | None = None
     target_date: str | None = None
 
@@ -85,6 +90,7 @@ class GoalOut(BaseModel):
     project_id: str
     title: str
     description: str
+    motivation: str = ""
     status: str
     target_date: str | None
     created_at: str
@@ -96,6 +102,7 @@ class GoalOut(BaseModel):
 class TaskCreate(BaseModel):
     title: str
     description: str = ""
+    rationale: str = ""
     priority: str = "medium"
     goal_id: str | None = None
     tags: list[str] = []
@@ -105,6 +112,7 @@ class TaskCreate(BaseModel):
 class TaskUpdate(BaseModel):
     title: str | None = None
     description: str | None = None
+    rationale: str | None = None
     status: str | None = None
     priority: str | None = None
     goal_id: str | None = None
@@ -129,6 +137,7 @@ class TaskOut(BaseModel):
     goal_id: str | None
     title: str
     description: str
+    rationale: str = ""
     status: str
     priority: str
     tags: list[str] = []
@@ -182,6 +191,7 @@ class WorkLogOut(BaseModel):
 class ProjectSummary(BaseModel):
     id: str
     name: str
+    motivation: str = ""
     goals_active: int
     tasks_summary: dict[str, int]
     blocked_tasks: int
@@ -197,6 +207,7 @@ class BlockedTaskOut(BaseModel):
 class NextAction(BaseModel):
     id: str
     title: str
+    rationale: str = ""
     priority: str
     project_id: str
     project_name: str
@@ -224,6 +235,7 @@ class NextOut(BaseModel):
 class ProjectWeekSummary(BaseModel):
     project_id: str
     project_name: str
+    project_motivation: str = ""
     entry_count: int
     entries: list[WorkLogOut]
 

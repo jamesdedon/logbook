@@ -4,8 +4,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from logbook.models import Goal, Project, Tag, Task
 
 
-async def create_project(db: AsyncSession, name: str, description: str = "", tags: list[str] | None = None) -> Project:
-    project = Project(name=name, description=description)
+async def create_project(db: AsyncSession, name: str, description: str = "", motivation: str = "", tags: list[str] | None = None) -> Project:
+    project = Project(name=name, description=description, motivation=motivation)
     db.add(project)
     await db.flush()
     if tags:
