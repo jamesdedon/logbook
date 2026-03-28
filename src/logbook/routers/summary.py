@@ -95,8 +95,8 @@ async def get_next(db: AsyncSession = Depends(get_db)):
 
 
 @router.get("/weekly", response_model=ItemResponse)
-async def get_weekly(weeks_back: int = 0, db: AsyncSession = Depends(get_db)):
-    data = await svc.get_weekly_report(db, weeks_back=weeks_back)
+async def get_weekly(weeks_back: int = 0, project_id: str | None = None, db: AsyncSession = Depends(get_db)):
+    data = await svc.get_weekly_report(db, weeks_back=weeks_back, project_id=project_id)
     now = datetime.now(timezone.utc).isoformat()
 
     def _entry_out(e):
@@ -144,8 +144,8 @@ async def get_weekly(weeks_back: int = 0, db: AsyncSession = Depends(get_db)):
 
 
 @router.get("/export/weekly", response_class=PlainTextResponse)
-async def export_weekly(weeks_back: int = 0, db: AsyncSession = Depends(get_db)):
-    markdown = await export_weekly_markdown(db, weeks_back=weeks_back)
+async def export_weekly(weeks_back: int = 0, project_id: str | None = None, db: AsyncSession = Depends(get_db)):
+    markdown = await export_weekly_markdown(db, weeks_back=weeks_back, project_id=project_id)
     return PlainTextResponse(content=markdown, media_type="text/markdown")
 
 

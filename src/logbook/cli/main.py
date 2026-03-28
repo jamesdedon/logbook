@@ -447,10 +447,14 @@ def next_actions(json_out: bool = typer.Option(False, "--json")):
 @app.command("weekly")
 def weekly_report(
     weeks_back: int = typer.Option(0, "--weeks-back", "-w", help="0=this week, 1=last week, etc."),
+    project: str = typer.Option(None, "--project", "-p", help="Filter by project ID"),
     json_out: bool = typer.Option(False, "--json"),
 ):
+    params: dict = {"weeks_back": weeks_back}
+    if project:
+        params["project_id"] = project
     with _client() as c:
-        resp = c.get("/summary/weekly", params={"weeks_back": weeks_back})
+        resp = c.get("/summary/weekly", params=params)
         _handle_error(resp)
         data = resp.json()["data"]
 
@@ -487,10 +491,14 @@ def weekly_report(
 @app.command("export")
 def export_weekly(
     weeks_back: int = typer.Option(0, "--weeks-back", "-w", help="0=this week, 1=last week, etc."),
+    project: str = typer.Option(None, "--project", "-p", help="Filter by project ID"),
     output: str = typer.Option(None, "--output", "-o", help="Save to file (default: print to stdout)"),
 ):
+    params: dict = {"weeks_back": weeks_back}
+    if project:
+        params["project_id"] = project
     with _client() as c:
-        resp = c.get("/summary/export/weekly", params={"weeks_back": weeks_back})
+        resp = c.get("/summary/export/weekly", params=params)
         _handle_error(resp)
         markdown = resp.text
 

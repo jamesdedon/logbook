@@ -149,7 +149,7 @@ async def get_next_actions(db: AsyncSession, limit: int = 10) -> list[dict]:
     return next_actions
 
 
-async def get_weekly_report(db: AsyncSession, weeks_back: int = 0) -> dict:
+async def get_weekly_report(db: AsyncSession, weeks_back: int = 0, project_id: str | None = None) -> dict:
     """Generate a weekly report. weeks_back=0 is the current week, 1 is last week, etc."""
     now = datetime.now(timezone.utc)
     # Find the start of the target week (Monday)
@@ -161,34 +161,43 @@ async def get_weekly_report(db: AsyncSession, weeks_back: int = 0) -> dict:
     week_start_iso = week_start.isoformat()
 
     # Work log entries for the week
-    log_result = await db.execute(
+    log_stmt = (
         select(WorkLogEntry)
         .where(WorkLogEntry.created_at >= week_start_iso, WorkLogEntry.created_at < week_end)
-        .order_by(WorkLogEntry.created_at.asc())
     )
+    if project_id:
+        log_stmt = log_stmt.where(WorkLogEntry.project_id == project_id)
+    log_result = await db.execute(log_stmt.order_by(WorkLogEntry.created_at.asc()))
     log_entries = list(log_result.scalars().all())
 
     # Tasks completed this week
-    tasks_result = await db.execute(
+    tasks_stmt = (
         select(Task)
         .where(Task.completed_at >= week_start_iso, Task.completed_at < week_end, Task.status == "done")
-        .order_by(Task.completed_at.asc())
     )
+    if project_id:
+        tasks_stmt = tasks_stmt.where(Task.project_id == project_id)
+    tasks_result = await db.execute(tasks_stmt.order_by(Task.completed_at.asc()))
     tasks_completed = list(tasks_result.scalars().all())
 
     # Tasks created this week
-    tasks_created_result = await db.execute(
+    tasks_created_stmt = (
         select(Task)
         .where(Task.created_at >= week_start_iso, Task.created_at < week_end)
-        .order_by(Task.created_at.asc())
     )
+    if project_id:
+        tasks_created_stmt = tasks_created_stmt.where(Task.project_id == project_id)
+    tasks_created_result = await db.execute(tasks_created_stmt.order_by(Task.created_at.asc()))
     tasks_created = list(tasks_created_result.scalars().all())
 
     # Goals completed this week
-    goals_result = await db.execute(
+    goals_stmt = (
         select(Goal)
         .where(Goal.updated_at >= week_start_iso, Goal.updated_at < week_end, Goal.status == "completed")
     )
+    if project_id:
+        goals_stmt = goals_stmt.where(Goal.project_id == project_id)
+    goals_result = await db.execute(goals_stmt)
     goals_completed = list(goals_result.scalars().all())
 
     # Group log entries by day

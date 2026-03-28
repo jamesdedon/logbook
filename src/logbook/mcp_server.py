@@ -61,13 +61,17 @@ def logbook_summary() -> str:
 
 
 @mcp.tool()
-def logbook_weekly(weeks_back: int = 0) -> str:
+def logbook_weekly(weeks_back: int = 0, project_id: str | None = None) -> str:
     """Get a weekly export report showing all work done, grouped by project and day.
 
     Args:
         weeks_back: 0 for current week, 1 for last week, 2 for two weeks ago, etc.
+        project_id: Optional project ID to filter the report to a single project
     """
-    data = _get("/summary/weekly", params={"weeks_back": weeks_back})["data"]
+    params: dict = {"weeks_back": weeks_back}
+    if project_id:
+        params["project_id"] = project_id
+    data = _get("/summary/weekly", params=params)["data"]
     lines = [f"Weekly Report ({data['week_start'][:10]} → {data['week_end'][:10]})"]
     lines.append(f"  {data['total_log_entries']} entries | "
                  f"{data['total_tasks_completed']} tasks completed | "
@@ -455,14 +459,18 @@ def logbook_search(
 # --- Export ---
 
 @mcp.tool()
-def logbook_export_weekly(weeks_back: int = 0) -> str:
+def logbook_export_weekly(weeks_back: int = 0, project_id: str | None = None) -> str:
     """Export a weekly report as formatted markdown. Useful for sharing with teammates or saving to a file.
 
     Args:
         weeks_back: 0 for current week, 1 for last week, etc.
+        project_id: Optional project ID to filter the report to a single project
     """
+    params: dict = {"weeks_back": weeks_back}
+    if project_id:
+        params["project_id"] = project_id
     with httpx.Client(base_url=BASE_URL, timeout=10) as c:
-        resp = c.get("/summary/export/weekly", params={"weeks_back": weeks_back})
+        resp = c.get("/summary/export/weekly", params=params)
         resp.raise_for_status()
         return resp.text
 

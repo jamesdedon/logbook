@@ -90,6 +90,6 @@ def _render_weekly_markdown(data: dict) -> str:
     return "\n".join(lines)
 
 
-async def export_weekly_markdown(db: AsyncSession, weeks_back: int = 0) -> str:
-    data = await get_weekly_report(db, weeks_back=weeks_back)
+async def export_weekly_markdown(db: AsyncSession, weeks_back: int = 0, project_id: str | None = None) -> str:
+    data = await get_weekly_report(db, weeks_back=weeks_back, project_id=project_id)
     return _render_weekly_markdown(data)
