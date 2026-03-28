@@ -452,5 +452,20 @@ def logbook_search(
     return "\n".join(lines)
 
 
+# --- Export ---
+
+@mcp.tool()
+def logbook_export_weekly(weeks_back: int = 0) -> str:
+    """Export a weekly report as formatted markdown. Useful for sharing with teammates or saving to a file.
+
+    Args:
+        weeks_back: 0 for current week, 1 for last week, etc.
+    """
+    with httpx.Client(base_url=BASE_URL, timeout=10) as c:
+        resp = c.get("/summary/export/weekly", params={"weeks_back": weeks_back})
+        resp.raise_for_status()
+        return resp.text
+
+
 if __name__ == "__main__":
     mcp.run()

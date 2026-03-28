@@ -4,6 +4,8 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from fastapi.responses import PlainTextResponse
+
 from logbook.database import get_db
 from logbook.schemas import (
     BlockedTaskOut,
@@ -21,6 +23,7 @@ from logbook.schemas import (
     WorkLogOut,
 )
 from logbook.services import summary as svc
+from logbook.services.export import export_weekly_markdown
 
 router = APIRouter(prefix="/summary", tags=["summary"])
 
@@ -138,6 +141,12 @@ async def get_weekly(weeks_back: int = 0, db: AsyncSession = Depends(get_db)):
         tasks_completed=[_task_out(t) for t in data["tasks_completed"]],
         tasks_created=[_task_out(t) for t in data["tasks_created"]],
     ))
+
+
+@router.get("/export/weekly", response_class=PlainTextResponse)
+async def export_weekly(weeks_back: int = 0, db: AsyncSession = Depends(get_db)):
+    markdown = await export_weekly_markdown(db, weeks_back=weeks_back)
+    return PlainTextResponse(content=markdown, media_type="text/markdown")
 
 
 @router.get("/blocked", response_model=ItemResponse)

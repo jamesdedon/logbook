@@ -484,6 +484,24 @@ def weekly_report(
         console.print("  No activity this week.")
 
 
+@app.command("export")
+def export_weekly(
+    weeks_back: int = typer.Option(0, "--weeks-back", "-w", help="0=this week, 1=last week, etc."),
+    output: str = typer.Option(None, "--output", "-o", help="Save to file (default: print to stdout)"),
+):
+    with _client() as c:
+        resp = c.get("/summary/export/weekly", params={"weeks_back": weeks_back})
+        _handle_error(resp)
+        markdown = resp.text
+
+    if output:
+        with open(output, "w") as f:
+            f.write(markdown)
+        console.print(f"[green]Exported to {output}[/green]")
+    else:
+        console.print(markdown)
+
+
 @app.command("blocked")
 def blocked_tasks(json_out: bool = typer.Option(False, "--json")):
     with _client() as c:
