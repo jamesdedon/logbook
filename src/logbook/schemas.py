@@ -268,6 +268,8 @@ class SearchResult(BaseModel):
     title_snippet: str
     body_snippet: str
     rank: float
+    project_name: str | None = None
+    created_at: str | None = None
 
 
 class SearchResponse(BaseModel):
