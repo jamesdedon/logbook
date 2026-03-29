@@ -8,43 +8,61 @@ from logbook.models import Goal, Project, Task, TaskDependency, WorkLogEntry
 
 
 async def get_summary(db: AsyncSession) -> dict:
-    # Active projects with counts
+    # Active projects
     projects_result = await db.execute(select(Project).where(Project.status == "active"))
     projects = list(projects_result.scalars().all())
+    project_ids = [p.id for p in projects]
+
+    # Bulk: active goal counts per project
+    goals_result = await db.execute(
+        select(Goal.project_id, func.count())
+        .where(Goal.project_id.in_(project_ids), Goal.status == "active")
+        .group_by(Goal.project_id)
+    )
+    goals_by_project = dict(goals_result.all())
+
+    # Bulk: task counts per project per status
+    tasks_result = await db.execute(
+        select(Task.project_id, Task.status, func.count())
+        .where(Task.project_id.in_(project_ids))
+        .group_by(Task.project_id, Task.status)
+    )
+    task_counts_by_project: dict[str, dict[str, int]] = {}
+    for pid, status, count in tasks_result.all():
+        task_counts_by_project.setdefault(pid, {})[status] = count
+
+    # Bulk: blocked task counts per project
+    blocked_subq = (
+        select(TaskDependency.blocked_id)
+        .join(Task, Task.id == TaskDependency.blocker_id)
+        .where(Task.status != "done")
+    )
+    blocked_result = await db.execute(
+        select(Task.project_id, func.count())
+        .where(
+            Task.project_id.in_(project_ids),
+            Task.status.in_(["todo", "in_progress"]),
+            Task.id.in_(blocked_subq),
+        )
+        .group_by(Task.project_id)
+    )
+    blocked_by_project = dict(blocked_result.all())
 
     active_projects = []
     for p in projects:
-        goals_count = await db.scalar(
-            select(func.count()).where(Goal.project_id == p.id, Goal.status == "active")
-        )
-        task_counts = {}
-        for status in ("todo", "in_progress", "done", "cancelled"):
-            count = await db.scalar(
-                select(func.count()).where(Task.project_id == p.id, Task.status == status)
-            )
-            task_counts[status] = count or 0
-
-        blocked_count = await db.scalar(
-            select(func.count())
-            .select_from(Task)
-            .where(
-                Task.project_id == p.id,
-                Task.status.in_(["todo", "in_progress"]),
-                Task.id.in_(
-                    select(TaskDependency.blocked_id)
-                    .join(Task, Task.id == TaskDependency.blocker_id)
-                    .where(Task.status != "done")
-                ),
-            )
-        )
-
+        tc = task_counts_by_project.get(p.id, {})
         active_projects.append({
             "id": p.id,
             "name": p.name,
             "motivation": p.motivation or "",
-            "goals_active": goals_count or 0,
-            "tasks_summary": task_counts,
-            "blocked_tasks": blocked_count or 0,
+            "goals_active": goals_by_project.get(p.id, 0),
+            "tasks_summary": {
+                "todo": tc.get("todo", 0),
+                "in_progress": tc.get("in_progress", 0),
+                "done": tc.get("done", 0),
+                "cancelled": tc.get("cancelled", 0),
+            },
+            "blocked_tasks": blocked_by_project.get(p.id, 0),
         })
 
     # Recent activity (last 10 entries)
@@ -171,7 +189,7 @@ async def get_weekly_report(db: AsyncSession, weeks_back: int = 0, project_id: s
     )
     if project_id:
         log_stmt = log_stmt.where(WorkLogEntry.project_id == project_id)
-    log_result = await db.execute(log_stmt.order_by(WorkLogEntry.created_at.asc()))
+    log_result = await db.execute(log_stmt.order_by(WorkLogEntry.created_at.desc()))
     log_entries = list(log_result.scalars().all())
 
     # Tasks completed this week
@@ -181,7 +199,7 @@ async def get_weekly_report(db: AsyncSession, weeks_back: int = 0, project_id: s
     )
     if project_id:
         tasks_stmt = tasks_stmt.where(Task.project_id == project_id)
-    tasks_result = await db.execute(tasks_stmt.order_by(Task.completed_at.asc()))
+    tasks_result = await db.execute(tasks_stmt.order_by(Task.completed_at.desc()))
     tasks_completed = list(tasks_result.scalars().all())
 
     # Tasks created this week
@@ -191,7 +209,7 @@ async def get_weekly_report(db: AsyncSession, weeks_back: int = 0, project_id: s
     )
     if project_id:
         tasks_created_stmt = tasks_created_stmt.where(Task.project_id == project_id)
-    tasks_created_result = await db.execute(tasks_created_stmt.order_by(Task.created_at.asc()))
+    tasks_created_result = await db.execute(tasks_created_stmt.order_by(Task.created_at.desc()))
     tasks_created = list(tasks_created_result.scalars().all())
 
     # Goals completed this week
