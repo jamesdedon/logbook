@@ -21,7 +21,7 @@ Logbook solves this by:
 - **Capturing intent.** Projects and goals have a motivation field, tasks have a rationale — so you always know *why* something exists, not just what it is.
 - **Letting you search everything.** Can't remember where that authentication fix went? Search "auth" and Logbook finds every project, task, and log entry that mentions it.
 - **Giving you weekly reports.** Need to remember what you accomplished last week? One command and you have a full summary grouped by project and day. Export it as markdown to share with your team.
-- **Showing a dashboard.** Pull up the web UI at `/ui` for standups — project cards, timelines, and weekly stats at a glance.
+- **Showing a dashboard.** Pull up the web UI at `http://localhost:8000/ui/` for standups — project cards, timelines, and weekly stats at a glance.
 
 ## Features
 
@@ -30,7 +30,7 @@ Logbook solves this by:
 - **Summary endpoints**: today, next actions, blocked tasks, weekly report
 - **Full-text search** across all entities (FTS5 with stemming and prefix matching)
 - **Markdown export** for weekly reports, filterable by project
-- **Web dashboard** at `/ui` — summary cards, today timeline, weekly report with navigation, full-text search, light/dark theme
+- **Web dashboard** at `http://localhost:8000/ui/` — summary cards, today timeline, weekly report with navigation, full-text search, light/dark theme
 - **CLI** (`logbook`) for terminal workflows
 - **MCP server** for native Claude Code integration (18 tools)
 - **REST API** with clean JSON responses for any agent or script
@@ -93,7 +93,7 @@ curl http://localhost:8000/health
 
 You should see: `{"status":"ok"}`
 
-The API is available at `http://localhost:8000`. OpenAPI docs at `/docs`. Web dashboard at `/ui`.
+The API is available at `http://localhost:8000`. OpenAPI docs at `/docs`. Web dashboard at `http://localhost:8000/ui/`.
 
 ### Connect Claude Code
 

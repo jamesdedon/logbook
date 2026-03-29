@@ -47,6 +47,23 @@ function prettyDate(isoStr) {
   }
 }
 
+function commitInfo(metadata) {
+  if (!metadata) return "";
+  const git = metadata.git || {};
+  let commits = git.commits || [];
+  // Legacy flat format
+  if (!commits.length && metadata.commit) commits = [metadata.commit];
+  if (!commits.length) return "";
+  const short = commits.map((c) => c.slice(0, 7)).join(", ");
+  const repo = git.repo || metadata.repo || "";
+  const branch = git.branch || metadata.branch || "";
+  let label = short;
+  if (repo && branch) label = `${short} in ${repo}/${branch}`;
+  else if (repo) label = `${short} in ${repo}`;
+  else if (branch) label = `${short} on ${branch}`;
+  return `<span class="commit-info">${esc(label)}</span>`;
+}
+
 function priorityClass(p) {
   return `priority-${p}`;
 }
@@ -126,10 +143,11 @@ async function toggleProjectDetail(card, projectId) {
     if (logs.length) {
       html += `<div class="detail-section"><div class="detail-label">Recent work</div>`;
       for (const e of logs) {
+        const ci = commitInfo(e.metadata);
         html += `
           <div class="timeline-entry">
             <div class="timeline-time">${esc(time(e.created_at))}</div>
-            <div class="timeline-desc">${esc(e.description)}</div>
+            <div class="timeline-desc">${esc(e.description)}${ci ? " " + ci : ""}</div>
           </div>`;
       }
       html += `</div>`;
@@ -222,10 +240,11 @@ function renderToday(data) {
   if (data.log_entries?.length) {
     html += `<div class="section"><div class="section-title">Work logged today</div>`;
     for (const e of data.log_entries) {
+      const ci = commitInfo(e.metadata);
       html += `
         <div class="timeline-entry">
           <div class="timeline-time">${esc(time(e.created_at))}</div>
-          <div class="timeline-desc">${esc(e.description)}</div>
+          <div class="timeline-desc">${esc(e.description)}${ci ? " " + ci : ""}</div>
         </div>`;
     }
     html += `</div>`;
@@ -298,10 +317,11 @@ function renderWeekly(data) {
       for (const [day, entries] of Object.entries(byDay)) {
         html += `<div class="day-header">${esc(prettyDate(day))}</div>`;
         for (const e of entries) {
+          const ci = commitInfo(e.metadata);
           html += `
             <div class="timeline-entry">
               <div class="timeline-time">${esc(time(e.created_at))}</div>
-              <div class="timeline-desc">${esc(e.description)}</div>
+              <div class="timeline-desc">${esc(e.description)}${ci ? " " + ci : ""}</div>
             </div>`;
         }
       }
