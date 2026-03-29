@@ -3,6 +3,7 @@ from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
+from setproctitle import setproctitle
 
 from logbook.routers import goals, projects, search, summary, tasks, worklog
 
@@ -11,6 +12,7 @@ STATIC_DIR = Path(__file__).parent / "static"
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
+    setproctitle("logbook")
     yield
 
 
