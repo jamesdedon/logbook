@@ -81,21 +81,25 @@ async def list_tasks(
         limit=limit, offset=offset,
     )
     # Batch-resolve project names
-    pname_cache: dict[str, str] = {}
-    for t in tasks:
-        if t.project_id not in pname_cache:
-            p = await db.get(Project, t.project_id)
-            pname_cache[t.project_id] = p.name if p else "Unknown"
-    items = []
-    for t in tasks:
-        tags = await project_svc.get_tags(db, "task", t.id)
-        items.append(TaskOut(
-            id=t.id, project_id=t.project_id, project_name=pname_cache[t.project_id],
+    project_ids = list({t.project_id for t in tasks if t.project_id})
+    if project_ids:
+        proj_result = await db.execute(
+            select(Project.id, Project.name).where(Project.id.in_(project_ids))
+        )
+        pname_cache = dict(proj_result.all())
+    else:
+        pname_cache = {}
+    tags_map = await project_svc.get_tags_batch(db, "task", [t.id for t in tasks])
+    items = [
+        TaskOut(
+            id=t.id, project_id=t.project_id, project_name=pname_cache.get(t.project_id, "Unknown"),
             goal_id=t.goal_id,
             title=t.title, description=t.description, rationale=t.rationale,
-            status=t.status, priority=t.priority, tags=tags,
+            status=t.status, priority=t.priority, tags=tags_map.get(t.id, []),
             created_at=t.created_at, updated_at=t.updated_at, completed_at=t.completed_at,
-        ))
+        )
+        for t in tasks
+    ]
     return ListResponse(data=items, meta=Meta(total=total, limit=limit, offset=offset))
 
 
@@ -114,16 +118,17 @@ async def list_project_tasks(
     )
     project = await db.get(Project, project_id)
     pname = project.name if project else "Unknown"
-    items = []
-    for t in tasks:
-        tags = await project_svc.get_tags(db, "task", t.id)
-        items.append(TaskOut(
+    tags_map = await project_svc.get_tags_batch(db, "task", [t.id for t in tasks])
+    items = [
+        TaskOut(
             id=t.id, project_id=t.project_id, project_name=pname,
             goal_id=t.goal_id,
             title=t.title, description=t.description, rationale=t.rationale,
-            status=t.status, priority=t.priority, tags=tags,
+            status=t.status, priority=t.priority, tags=tags_map.get(t.id, []),
             created_at=t.created_at, updated_at=t.updated_at, completed_at=t.completed_at,
-        ))
+        )
+        for t in tasks
+    ]
     return ListResponse(data=items, meta=Meta(total=total, limit=limit, offset=offset))
 
 

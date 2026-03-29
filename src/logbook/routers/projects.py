@@ -22,14 +22,15 @@ async def create_project(body: ProjectCreate, db: AsyncSession = Depends(get_db)
 @router.get("", response_model=ListResponse)
 async def list_projects(status: str | None = None, db: AsyncSession = Depends(get_db)):
     projects = await svc.list_projects(db, status=status)
-    items = []
-    for p in projects:
-        tags = await svc.get_tags(db, "project", p.id)
-        items.append(ProjectOut(
+    tags_map = await svc.get_tags_batch(db, "project", [p.id for p in projects])
+    items = [
+        ProjectOut(
             id=p.id, name=p.name, description=p.description,
-            motivation=p.motivation, status=p.status, tags=tags,
+            motivation=p.motivation, status=p.status, tags=tags_map.get(p.id, []),
             created_at=p.created_at, updated_at=p.updated_at,
-        ))
+        )
+        for p in projects
+    ]
     return ListResponse(data=items, meta=Meta(total=len(items), limit=len(items), offset=0))
 
 

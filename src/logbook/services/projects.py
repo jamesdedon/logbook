@@ -70,3 +70,17 @@ async def get_tags(db: AsyncSession, entity_type: str, entity_id: str) -> list[s
         select(Tag.tag).where(Tag.entity_type == entity_type, Tag.entity_id == entity_id)
     )
     return list(result.scalars().all())
+
+
+async def get_tags_batch(db: AsyncSession, entity_type: str, entity_ids: list[str]) -> dict[str, list[str]]:
+    """Load tags for multiple entities in a single query. Returns {entity_id: [tags]}."""
+    if not entity_ids:
+        return {}
+    result = await db.execute(
+        select(Tag.entity_id, Tag.tag)
+        .where(Tag.entity_type == entity_type, Tag.entity_id.in_(entity_ids))
+    )
+    tags_map: dict[str, list[str]] = {eid: [] for eid in entity_ids}
+    for entity_id, tag in result.all():
+        tags_map[entity_id].append(tag)
+    return tags_map

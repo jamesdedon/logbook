@@ -45,10 +45,8 @@ async def list_entries(
         db, project_id=project_id, task_id=task_id, since=since,
         until=until, q=q, limit=limit, offset=offset,
     )
-    items = []
-    for e in entries:
-        tags = await project_svc.get_tags(db, "work_log_entry", e.id)
-        items.append(_entry_to_out(e, tags))
+    tags_map = await project_svc.get_tags_batch(db, "work_log_entry", [e.id for e in entries])
+    items = [_entry_to_out(e, tags_map.get(e.id, [])) for e in entries]
     return ListResponse(data=items, meta=Meta(total=total, limit=limit, offset=offset))
 
 
