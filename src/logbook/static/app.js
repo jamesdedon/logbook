@@ -386,26 +386,59 @@ function renderHelp() {
   <p>Type in the search box to search across projects, goals, tasks, and work log entries. Supports prefix matching and phrase search (<code>"exact phrase"</code>).</p>
 
   <h2>CLI commands</h2>
+
+  <h3>Logging &amp; viewing</h3>
   <table>
-    <tr><td><code>logbook log "description"</code></td><td>Log work</td></tr>
-    <tr><td><code>logbook tasks</code></td><td>List active tasks</td></tr>
-    <tr><td><code>logbook task create &lt;PROJECT&gt; "title" --priority high</code></td><td>Create a task</td></tr>
-    <tr><td><code>logbook task done &lt;ID&gt;</code></td><td>Complete a task</td></tr>
-    <tr><td><code>logbook summary</code></td><td>Full overview</td></tr>
+    <tr><td><code>logbook log "description"</code></td><td>Log work (supports --project, --task, --commit, --repo, --branch)</td></tr>
+    <tr><td><code>logbook tasks</code></td><td>List active tasks (supports --project, --status, --priority, --blocked)</td></tr>
+    <tr><td><code>logbook summary</code></td><td>Full overview of all projects</td></tr>
     <tr><td><code>logbook today</code></td><td>Today's activity</td></tr>
-    <tr><td><code>logbook next</code></td><td>What to work on next</td></tr>
-    <tr><td><code>logbook blocked</code></td><td>Blocked tasks</td></tr>
-    <tr><td><code>logbook weekly</code></td><td>Weekly report</td></tr>
-    <tr><td><code>logbook search "keyword"</code></td><td>Search everything</td></tr>
-    <tr><td><code>logbook export -o report.md</code></td><td>Export weekly as markdown</td></tr>
-    <tr><td><code>logbook project create "name" --motivation "why"</code></td><td>Create a project</td></tr>
-    <tr><td><code>logbook goal create &lt;PROJECT&gt; "title"</code></td><td>Create a goal</td></tr>
-    <tr><td><code>logbook backup /path/to/backup.db</code></td><td>Backup the database</td></tr>
-    <tr><td><code>logbook import-db /path/to/file.db</code></td><td>Import a database</td></tr>
-    <tr><td><code>logbook restart</code></td><td>Reinstall and restart service</td></tr>
-    <tr><td><code>logbook install-service</code></td><td>Install as system service</td></tr>
+    <tr><td><code>logbook next</code></td><td>What to work on next (ranked by priority, impact, age)</td></tr>
+    <tr><td><code>logbook blocked</code></td><td>Show blocked tasks and what's blocking them</td></tr>
+    <tr><td><code>logbook weekly</code></td><td>Weekly report (supports -w for weeks back, -p for project)</td></tr>
+    <tr><td><code>logbook search "keyword"</code></td><td>Search everything (supports --type to filter)</td></tr>
+    <tr><td><code>logbook export -o report.md</code></td><td>Export weekly report as markdown</td></tr>
   </table>
-  <p>All commands support <code>--json</code> for machine-readable output.</p>
+
+  <h3>Projects, goals &amp; tasks</h3>
+  <table>
+    <tr><td><code>logbook project create "name" --motivation "why"</code></td><td>Create a project</td></tr>
+    <tr><td><code>logbook project show &lt;ID&gt;</code></td><td>Show project details</td></tr>
+    <tr><td><code>logbook project archive &lt;ID&gt;</code></td><td>Archive a project</td></tr>
+    <tr><td><code>logbook goal create &lt;PROJECT&gt; "title"</code></td><td>Create a goal (supports --target, --motivation)</td></tr>
+    <tr><td><code>logbook goal show &lt;ID&gt;</code></td><td>Show goal details</td></tr>
+    <tr><td><code>logbook goal complete &lt;ID&gt;</code></td><td>Mark a goal complete</td></tr>
+    <tr><td><code>logbook task create &lt;PROJECT&gt; "title"</code></td><td>Create a task (supports --priority, --rationale, --goal, --blocked-by)</td></tr>
+    <tr><td><code>logbook task show &lt;ID&gt;</code></td><td>Show task details with dependencies</td></tr>
+    <tr><td><code>logbook task start &lt;ID&gt;</code></td><td>Mark a task in progress</td></tr>
+    <tr><td><code>logbook task done &lt;ID&gt;</code></td><td>Complete a task</td></tr>
+    <tr><td><code>logbook task block &lt;ID&gt; --by &lt;BLOCKER_ID&gt;</code></td><td>Add a task dependency</td></tr>
+  </table>
+
+  <h3>Backup &amp; restore</h3>
+  <table>
+    <tr><td><code>logbook backup</code></td><td>Backup database to configured backup_path</td></tr>
+    <tr><td><code>logbook backup /path/to/file.db</code></td><td>Backup to a specific path</td></tr>
+    <tr><td><code>logbook restore</code></td><td>Restore database from configured backup_path</td></tr>
+    <tr><td><code>logbook restore /path/to/file.db</code></td><td>Restore from a specific path</td></tr>
+    <tr><td><code>logbook import-db /path/to/file.db</code></td><td>Import a database file (alias for restore)</td></tr>
+  </table>
+
+  <h3>Configuration &amp; service</h3>
+  <table>
+    <tr><td><code>logbook config</code></td><td>Show current configuration</td></tr>
+    <tr><td><code>logbook config-set &lt;KEY&gt; &lt;VALUE&gt;</code></td><td>Set a config value (persisted to .env file)</td></tr>
+    <tr><td><code>logbook doctor</code></td><td>Check installation health (runtime, service, database, network)</td></tr>
+    <tr><td><code>logbook install-service</code></td><td>Install as system service (systemd on Linux, launchd on macOS)</td></tr>
+    <tr><td><code>logbook restart</code></td><td>Reinstall package and restart service</td></tr>
+  </table>
+  <p>All data commands support <code>--json</code> for machine-readable output.</p>
+
+  <h2>Git metadata</h2>
+  <p>When logging work tied to commits, include git info:</p>
+  <pre>logbook log "shipped the auth refactor" --project &lt;ID&gt; --commit abc1234 --repo logbook --branch master</pre>
+  <p>Multiple <code>--commit</code> flags attach multiple commits to one entry. Git metadata is stored as:</p>
+  <pre>{"git": {"repo": "logbook", "branch": "master", "commits": ["abc1234", "def5678"]}}</pre>
 
   <h2>Claude Code integration</h2>
   <p>Connect once with:</p>

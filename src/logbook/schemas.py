@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from typing import Any
 
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, Field, field_validator
 
 
 # --- Response envelope ---
@@ -160,7 +160,16 @@ class WorkLogCreate(BaseModel):
     description: str
     project_id: str | None = None
     task_id: str | None = None
-    metadata: dict[str, Any] = {}
+    metadata: dict[str, Any] = Field(
+        default={},
+        description='Optional metadata. For git-linked work, use: {"git": {"repo": "repo-name", "branch": "branch-name", "commits": ["abc1234", "def5678"]}}',
+        json_schema_extra={
+            "examples": [
+                {},
+                {"git": {"repo": "logbook", "branch": "master", "commits": ["abc1234"]}},
+            ]
+        },
+    )
     tags: list[str] = []
 
     @field_validator("metadata", mode="before")
