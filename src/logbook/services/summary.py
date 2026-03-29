@@ -154,21 +154,29 @@ async def get_next_actions(db: AsyncSession, limit: int = 10) -> list[dict]:
     result = await db.execute(stmt)
     rows = result.all()
 
-    next_actions = []
-    for row in rows:
-        task = row[0]
-        # Get project name
-        project = await db.get(Project, task.project_id)
-        next_actions.append({
-            "id": task.id,
-            "title": task.title,
-            "rationale": task.rationale or "",
-            "priority": task.priority,
-            "project_id": task.project_id,
-            "project_name": project.name if project else "unknown",
-        })
+    tasks = [row[0] for row in rows]
 
-    return next_actions
+    # Batch load project names
+    project_ids = {t.project_id for t in tasks if t.project_id}
+    if project_ids:
+        proj_result = await db.execute(
+            select(Project.id, Project.name).where(Project.id.in_(project_ids))
+        )
+        pname_map = dict(proj_result.all())
+    else:
+        pname_map = {}
+
+    return [
+        {
+            "id": t.id,
+            "title": t.title,
+            "rationale": t.rationale or "",
+            "priority": t.priority,
+            "project_id": t.project_id,
+            "project_name": pname_map.get(t.project_id, "unknown"),
+        }
+        for t in tasks
+    ]
 
 
 async def get_weekly_report(db: AsyncSession, weeks_back: int = 0, project_id: str | None = None) -> dict:
@@ -284,20 +292,30 @@ async def get_blocked_tasks(db: AsyncSession) -> list[dict]:
         select(Task).where(Task.id.in_(blocked_subq), Task.status.in_(["todo", "in_progress"]))
     )
     blocked_tasks = list(result.scalars().all())
+    blocked_ids = [t.id for t in blocked_tasks]
 
-    output = []
-    for task in blocked_tasks:
-        blockers_result = await db.execute(
-            select(Task)
-            .join(TaskDependency, TaskDependency.blocker_id == Task.id)
-            .where(TaskDependency.blocked_id == task.id, Task.status != "done")
-        )
-        blockers = list(blockers_result.scalars().all())
-        output.append({
+    if not blocked_ids:
+        return []
+
+    # Batch load all blockers for all blocked tasks
+    blockers_result = await db.execute(
+        select(TaskDependency.blocked_id, Task)
+        .join(Task, Task.id == TaskDependency.blocker_id)
+        .where(TaskDependency.blocked_id.in_(blocked_ids), Task.status != "done")
+    )
+    blockers_by_task: dict[str, list] = {}
+    for blocked_id, blocker in blockers_result.all():
+        blockers_by_task.setdefault(blocked_id, []).append(blocker)
+
+    return [
+        {
             "id": task.id,
             "title": task.title,
             "project_id": task.project_id,
-            "blocked_by": [{"id": b.id, "title": b.title, "status": b.status} for b in blockers],
-        })
-
-    return output
+            "blocked_by": [
+                {"id": b.id, "title": b.title, "status": b.status}
+                for b in blockers_by_task.get(task.id, [])
+            ],
+        }
+        for task in blocked_tasks
+    ]
