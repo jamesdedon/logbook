@@ -1,4 +1,5 @@
 import os
+import platform
 import time
 from zoneinfo import ZoneInfo
 
@@ -7,28 +8,37 @@ from pydantic_settings import BaseSettings
 
 def _system_timezone() -> str:
     """Detect the system's local timezone name."""
-    local_tz = time.tzname[0]
-    # time.tzname gives abbreviations like 'CST'; try /etc/localtime via datetime
-    try:
-        import subprocess
-        result = subprocess.run(
-            ["timedatectl", "show", "--property=Timezone", "--value"],
-            capture_output=True, text=True, timeout=2,
-        )
-        if result.returncode == 0 and result.stdout.strip():
-            return result.stdout.strip()
-    except (FileNotFoundError, subprocess.TimeoutExpired):
-        pass
-    # Fallback: read /etc/timezone or resolve /etc/localtime
-    try:
-        with open("/etc/timezone") as f:
-            return f.read().strip()
-    except FileNotFoundError:
-        pass
-    import os
-    link = os.readlink("/etc/localtime")
-    if "/zoneinfo/" in link:
-        return link.split("/zoneinfo/", 1)[1]
+    if platform.system() == "Darwin":
+        # macOS: read /etc/localtime symlink
+        try:
+            link = os.readlink("/etc/localtime")
+            if "/zoneinfo/" in link:
+                return link.split("/zoneinfo/", 1)[1]
+        except OSError:
+            pass
+    else:
+        # Linux: try timedatectl first, then /etc/timezone, then /etc/localtime
+        try:
+            import subprocess
+            result = subprocess.run(
+                ["timedatectl", "show", "--property=Timezone", "--value"],
+                capture_output=True, text=True, timeout=2,
+            )
+            if result.returncode == 0 and result.stdout.strip():
+                return result.stdout.strip()
+        except (FileNotFoundError, subprocess.TimeoutExpired):
+            pass
+        try:
+            with open("/etc/timezone") as f:
+                return f.read().strip()
+        except FileNotFoundError:
+            pass
+        try:
+            link = os.readlink("/etc/localtime")
+            if "/zoneinfo/" in link:
+                return link.split("/zoneinfo/", 1)[1]
+        except OSError:
+            pass
     return "UTC"
 
 

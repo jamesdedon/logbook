@@ -570,9 +570,46 @@ def blocked_tasks(json_out: bool = typer.Option(False, "--json")):
         _indent(f"{bt['title']} — waiting on: {blockers}")
 
 
+def _restart_service():
+    """Restart the logbook service using the platform's service manager."""
+    import platform
+    import subprocess
+
+    system = platform.system()
+
+    if system == "Linux":
+        console.print("[cyan]Restarting logbook service (systemd)...[/cyan]")
+        result = subprocess.run(["systemctl", "--user", "restart", "logbook"], capture_output=True, text=True)
+        if result.returncode != 0:
+            console.print(f"[red]Restart failed:[/red] {result.stderr.strip()}")
+            raise typer.Exit(1)
+    elif system == "Darwin":
+        label = "com.logbook.server"
+        console.print("[cyan]Restarting logbook service (launchd)...[/cyan]")
+        # Stop if running, ignore errors if not loaded
+        subprocess.run(["launchctl", "bootout", f"gui/{os.getuid()}", label],
+                       capture_output=True, text=True)
+        plist_path = os.path.expanduser(f"~/Library/LaunchAgents/{label}.plist")
+        if not os.path.exists(plist_path):
+            console.print(f"[red]No launchd plist found at {plist_path}[/red]")
+            console.print("Run [bold]logbook install-service[/bold] first.")
+            raise typer.Exit(1)
+        result = subprocess.run(["launchctl", "bootstrap", f"gui/{os.getuid()}", plist_path],
+                                capture_output=True, text=True)
+        if result.returncode != 0:
+            console.print(f"[red]Restart failed:[/red] {result.stderr.strip()}")
+            raise typer.Exit(1)
+    else:
+        console.print(f"[red]Unsupported platform: {system}[/red]")
+        console.print("Start the server manually: uvicorn logbook.main:app --host 127.0.0.1 --port 8000")
+        raise typer.Exit(1)
+
+    console.print("[green]Logbook service restarted.[/green]")
+
+
 @app.command("restart")
 def restart():
-    """Reinstall the logbook package and restart the systemd service."""
+    """Reinstall the logbook package and restart the service."""
     import subprocess
 
     from logbook.config import settings
@@ -588,12 +625,105 @@ def restart():
         raise typer.Exit(1)
     console.print("[green]Installed.[/green]")
 
-    console.print("[cyan]Restarting logbook service...[/cyan]")
-    result = subprocess.run(["systemctl", "--user", "restart", "logbook"], capture_output=True, text=True)
-    if result.returncode != 0:
-        console.print(f"[red]Restart failed:[/red] {result.stderr.strip()}")
+    _restart_service()
+
+
+@app.command("install-service")
+def install_service():
+    """Install the logbook server as a system service (systemd on Linux, launchd on macOS)."""
+    import platform
+    import subprocess
+
+    from logbook.config import settings
+
+    system = platform.system()
+
+    if system == "Linux":
+        unit_dir = os.path.expanduser("~/.config/systemd/user")
+        unit_path = os.path.join(unit_dir, "logbook.service")
+        os.makedirs(unit_dir, exist_ok=True)
+
+        uvicorn_path = subprocess.run(
+            ["which", "uvicorn"], capture_output=True, text=True
+        ).stdout.strip()
+
+        unit = f"""[Unit]
+Description=Logbook API Server
+After=network.target
+
+[Service]
+Type=simple
+Environment=LOGBOOK_DB_PATH={settings.db_path}
+ExecStart={uvicorn_path} logbook.main:app --host {settings.host} --port {settings.port}
+Restart=on-failure
+
+[Install]
+WantedBy=default.target
+"""
+        with open(unit_path, "w") as f:
+            f.write(unit)
+        subprocess.run(["systemctl", "--user", "daemon-reload"], check=True)
+        subprocess.run(["systemctl", "--user", "enable", "logbook"], check=True)
+        subprocess.run(["systemctl", "--user", "start", "logbook"], check=True)
+        console.print(f"[green]Installed and started systemd service.[/green]")
+        console.print(f"  Unit file: {unit_path}")
+
+    elif system == "Darwin":
+        label = "com.logbook.server"
+        plist_dir = os.path.expanduser("~/Library/LaunchAgents")
+        plist_path = os.path.join(plist_dir, f"{label}.plist")
+        os.makedirs(plist_dir, exist_ok=True)
+
+        uvicorn_path = subprocess.run(
+            ["which", "uvicorn"], capture_output=True, text=True
+        ).stdout.strip()
+
+        log_dir = os.path.expanduser("~/Library/Logs/logbook")
+        os.makedirs(log_dir, exist_ok=True)
+
+        plist = f"""<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>{label}</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>{uvicorn_path}</string>
+        <string>logbook.main:app</string>
+        <string>--host</string>
+        <string>{settings.host}</string>
+        <string>--port</string>
+        <string>{str(settings.port)}</string>
+    </array>
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>LOGBOOK_DB_PATH</key>
+        <string>{settings.db_path}</string>
+    </dict>
+    <key>RunAtLoad</key>
+    <true/>
+    <key>KeepAlive</key>
+    <true/>
+    <key>StandardOutPath</key>
+    <string>{log_dir}/stdout.log</string>
+    <key>StandardErrorPath</key>
+    <string>{log_dir}/stderr.log</string>
+</dict>
+</plist>
+"""
+        with open(plist_path, "w") as f:
+            f.write(plist)
+        subprocess.run(["launchctl", "bootstrap", f"gui/{os.getuid()}", plist_path],
+                       capture_output=True, text=True)
+        console.print(f"[green]Installed and started launchd service.[/green]")
+        console.print(f"  Plist: {plist_path}")
+        console.print(f"  Logs: {log_dir}/")
+
+    else:
+        console.print(f"[red]Unsupported platform: {system}[/red]")
         raise typer.Exit(1)
-    console.print("[green]Logbook service restarted.[/green]")
 
 
 @app.command("search")
