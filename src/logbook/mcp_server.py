@@ -311,6 +311,28 @@ def logbook_project_detail(project_id: str) -> str:
     return "\n".join(lines)
 
 
+@mcp.tool()
+def logbook_project_archive(project_id: str) -> str:
+    """Archive a project. Archived projects are hidden from the default project list and summary.
+
+    Args:
+        project_id: The project ID to archive
+    """
+    data = _patch(f"/projects/{project_id}", {"status": "archived"})["data"]
+    return f"Archived project: {data['name']} (id: {data['id']})"
+
+
+@mcp.tool()
+def logbook_project_unarchive(project_id: str) -> str:
+    """Unarchive a project, restoring it to active status.
+
+    Args:
+        project_id: The project ID to unarchive
+    """
+    data = _patch(f"/projects/{project_id}", {"status": "active"})["data"]
+    return f"Unarchived project: {data['name']} (id: {data['id']})"
+
+
 # --- Task tools ---
 
 @mcp.tool()

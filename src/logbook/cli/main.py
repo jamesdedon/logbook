@@ -815,12 +815,23 @@ def restart():
 
     from logbook.config import settings
 
-    console.print("[cyan]Reinstalling logbook...[/cyan]")
-    result = subprocess.run(
-        ["pip", "install", "."],
-        capture_output=True, text=True,
-        cwd=settings.project_dir,
-    )
+    is_pipx = "pipx/venvs" in sys.prefix
+
+    if is_pipx:
+        console.print("[cyan]Reinstalling logbook via pipx...[/cyan]")
+        result = subprocess.run(
+            ["pipx", "install", "--force", "."],
+            capture_output=True, text=True,
+            cwd=settings.project_dir,
+        )
+    else:
+        console.print("[cyan]Reinstalling logbook via pip...[/cyan]")
+        result = subprocess.run(
+            ["pip", "install", "."],
+            capture_output=True, text=True,
+            cwd=settings.project_dir,
+        )
+
     if result.returncode != 0:
         console.print(f"[red]Install failed:[/red] {result.stderr.strip()}")
         raise typer.Exit(1)
