@@ -1,0 +1,489 @@
+const $ = (sel) => document.querySelector(sel);
+const $$ = (sel) => document.querySelectorAll(sel);
+const content = $("#content");
+
+let currentTab = "summary";
+let weeksBack = 0;
+
+// --- API ---
+
+async function api(path) {
+  const resp = await fetch(path);
+  if (!resp.ok) throw new Error(`${resp.status} ${resp.statusText}`);
+  const json = await resp.json();
+  return json.data;
+}
+
+// --- Helpers ---
+
+function esc(str) {
+  const el = document.createElement("span");
+  el.textContent = str;
+  return el.innerHTML;
+}
+
+function time(isoStr) {
+  if (!isoStr || isoStr.length < 16) return "";
+  try {
+    const d = new Date(isoStr);
+    return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  } catch {
+    return isoStr.slice(11, 16);
+  }
+}
+
+function date(isoStr) {
+  if (!isoStr) return "";
+  return isoStr.slice(0, 10);
+}
+
+function prettyDate(isoStr) {
+  if (!isoStr) return "";
+  try {
+    const d = new Date(isoStr.slice(0, 10) + "T12:00:00");
+    return d.toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" });
+  } catch {
+    return isoStr.slice(0, 10);
+  }
+}
+
+function priorityClass(p) {
+  return `priority-${p}`;
+}
+
+function groupBy(arr, keyFn) {
+  const groups = {};
+  for (const item of arr) {
+    const key = keyFn(item);
+    (groups[key] ||= []).push(item);
+  }
+  return groups;
+}
+
+// --- Renderers ---
+
+async function toggleProjectDetail(card, projectId) {
+  const existing = card.querySelector(".card-detail");
+  if (existing) {
+    existing.remove();
+    card.classList.remove("expanded");
+    return;
+  }
+
+  // Collapse any other expanded card first
+  for (const other of $$(".card-clickable.expanded")) {
+    other.querySelector(".card-detail")?.remove();
+    other.classList.remove("expanded");
+  }
+
+  card.classList.add("expanded");
+  const detail = document.createElement("div");
+  detail.className = "card-detail";
+  detail.innerHTML = `<p class="loading">Loading...</p>`;
+  card.appendChild(detail);
+
+  try {
+    const [tasksData, logData] = await Promise.all([
+      api(`/tasks?project_id=${projectId}&status=todo,in_progress,done&limit=20`),
+      api(`/log?project_id=${projectId}&limit=10`),
+    ]);
+
+    // tasksData is an array (from ListResponse), logData is also an array
+    const tasks = Array.isArray(tasksData) ? tasksData : [];
+    const logs = Array.isArray(logData) ? logData : [];
+
+    let html = "";
+
+    // Tasks by status
+    const activeTasks = tasks.filter((t) => t.status !== "done");
+    const doneTasks = tasks.filter((t) => t.status === "done");
+
+    if (activeTasks.length) {
+      html += `<div class="detail-section"><div class="detail-label">Tasks</div>`;
+      for (const t of activeTasks) {
+        const statusClass = t.status === "in_progress" ? "pill pill-active" : "pill pill-todo";
+        html += `
+          <div class="task-row">
+            <span class="pill pill-priority-${t.priority}">${esc(t.priority)}</span>
+            <span class="task-title">${esc(t.title)}</span>
+            <span class="${statusClass}">${esc(t.status.replace("_", " "))}</span>
+          </div>`;
+        if (t.rationale) {
+          html += `<div class="task-rationale">${esc(t.rationale)}</div>`;
+        }
+      }
+      html += `</div>`;
+    }
+
+    if (doneTasks.length) {
+      html += `<div class="detail-section"><div class="detail-label">Completed</div>`;
+      for (const t of doneTasks) {
+        html += `<div class="task-row task-done"><span class="check">&#10003;</span> ${esc(t.title)}</div>`;
+      }
+      html += `</div>`;
+    }
+
+    if (logs.length) {
+      html += `<div class="detail-section"><div class="detail-label">Recent work</div>`;
+      for (const e of logs) {
+        html += `
+          <div class="timeline-entry">
+            <div class="timeline-time">${esc(time(e.created_at))}</div>
+            <div class="timeline-desc">${esc(e.description)}</div>
+          </div>`;
+      }
+      html += `</div>`;
+    }
+
+    if (!tasks.length && !logs.length) {
+      html = `<p class="empty">No tasks or log entries.</p>`;
+    }
+
+    detail.innerHTML = html;
+  } catch (err) {
+    detail.innerHTML = `<p class="error">Failed to load: ${esc(err.message)}</p>`;
+  }
+}
+
+function renderSummary(data) {
+  let html = "";
+
+  // Project cards
+  if (data.active_projects?.length) {
+    html += `<div class="card-grid">`;
+    for (const p of data.active_projects) {
+      const ts = p.tasks_summary || {};
+      html += `
+        <div class="card card-clickable" data-project-id="${esc(p.id)}">
+          <h3>${esc(p.name)}</h3>
+          ${p.motivation ? `<div class="motivation">${esc(p.motivation)}</div>` : ""}
+          <div class="pills">
+            ${ts.todo ? `<span class="pill pill-todo">${ts.todo} todo</span>` : ""}
+            ${ts.in_progress ? `<span class="pill pill-active">${ts.in_progress} active</span>` : ""}
+            ${ts.done ? `<span class="pill pill-done">${ts.done} done</span>` : ""}
+            ${p.blocked_tasks ? `<span class="pill pill-blocked">${p.blocked_tasks} blocked</span>` : ""}
+          </div>
+        </div>`;
+    }
+    html += `</div>`;
+  }
+
+  // Next actions
+  if (data.next_actions?.length) {
+    html += `<div class="section"><div class="section-title">Next up</div>`;
+    for (const n of data.next_actions) {
+      html += `
+        <div class="item">
+          <div class="item-title">
+            <span class="${priorityClass(n.priority)}">${esc(n.priority)}</span>
+            ${esc(n.title)}
+            <span class="item-meta">${esc(n.project_name)}</span>
+          </div>
+          ${n.rationale ? `<div class="item-rationale">${esc(n.rationale)}</div>` : ""}
+        </div>`;
+    }
+    html += `</div>`;
+  }
+
+  // Blocked
+  if (data.blocked_tasks?.length) {
+    html += `<div class="section"><div class="section-title">Blocked</div>`;
+    for (const bt of data.blocked_tasks) {
+      const blockers = bt.blocked_by.map((b) => esc(b.title)).join(", ");
+      html += `
+        <div class="item">
+          <div class="item-title">${esc(bt.title)}</div>
+          <div class="item-meta">waiting on: ${blockers}</div>
+        </div>`;
+    }
+    html += `</div>`;
+  }
+
+  if (!data.active_projects?.length) {
+    html = `<p class="empty">No active projects.</p>`;
+  }
+
+  content.innerHTML = html;
+
+  // Wire up card clicks
+  for (const card of $$(".card-clickable")) {
+    card.addEventListener("click", (e) => {
+      // Don't toggle if clicking inside the detail area
+      if (e.target.closest(".card-detail")) return;
+      toggleProjectDetail(card, card.dataset.projectId);
+    });
+  }
+}
+
+function renderToday(data) {
+  let html = "";
+
+  // Log entries grouped by project
+  if (data.log_entries?.length) {
+    html += `<div class="section"><div class="section-title">Work logged today</div>`;
+    for (const e of data.log_entries) {
+      html += `
+        <div class="timeline-entry">
+          <div class="timeline-time">${esc(time(e.created_at))}</div>
+          <div class="timeline-desc">${esc(e.description)}</div>
+        </div>`;
+    }
+    html += `</div>`;
+  }
+
+  // Completed tasks grouped by project
+  if (data.tasks_completed?.length) {
+    const byProj = groupBy(data.tasks_completed, (t) => t.project_name || "Unknown");
+    html += `<div class="section"><div class="section-title">Completed</div>`;
+    for (const [pname, tasks] of Object.entries(byProj)) {
+      html += `<div class="project-group">`;
+      html += `<div class="project-group-header">${esc(pname)}</div>`;
+      for (const t of tasks) {
+        html += `<div class="item"><span class="check">&#10003;</span> ${esc(t.title)}</div>`;
+      }
+      html += `</div>`;
+    }
+    html += `</div>`;
+  }
+
+  if (!data.log_entries?.length && !data.tasks_completed?.length) {
+    html = `<p class="empty">No activity logged today.</p>`;
+  }
+
+  content.innerHTML = html;
+}
+
+function renderWeekly(data) {
+  let html = "";
+
+  // Week navigation
+  html += `
+    <div class="week-nav">
+      <button id="week-prev">&larr; Prev</button>
+      <span>${date(data.week_start)} &rarr; ${date(data.week_end)}</span>
+      <button id="week-next" ${weeksBack === 0 ? "disabled" : ""}>&rarr; Next</button>
+    </div>`;
+
+  // Stats bar
+  html += `
+    <div class="stats-bar">
+      <div class="stat">
+        <div class="stat-value">${data.total_log_entries}</div>
+        <div class="stat-label">Entries</div>
+      </div>
+      <div class="stat">
+        <div class="stat-value">${data.total_tasks_completed}</div>
+        <div class="stat-label">Completed</div>
+      </div>
+      <div class="stat">
+        <div class="stat-value">${data.total_tasks_created}</div>
+        <div class="stat-label">Created</div>
+      </div>
+      <div class="stat">
+        <div class="stat-value">${data.total_goals_completed}</div>
+        <div class="stat-label">Goals</div>
+      </div>
+    </div>`;
+
+  // By project
+  if (data.by_project?.length) {
+    html += `<div class="section"><div class="section-title">By project</div>`;
+    for (const p of data.by_project) {
+      html += `<div class="project-group">`;
+      html += `<div class="project-group-header">${esc(p.project_name)} <span class="item-meta">&mdash; ${p.entry_count} entries</span></div>`;
+      if (p.project_motivation) {
+        html += `<div class="project-group-motivation">${esc(p.project_motivation)}</div>`;
+      }
+      const byDay = groupBy(p.entries, (e) => date(e.created_at));
+      for (const [day, entries] of Object.entries(byDay)) {
+        html += `<div class="day-header">${esc(prettyDate(day))}</div>`;
+        for (const e of entries) {
+          html += `
+            <div class="timeline-entry">
+              <div class="timeline-time">${esc(time(e.created_at))}</div>
+              <div class="timeline-desc">${esc(e.description)}</div>
+            </div>`;
+        }
+      }
+      html += `</div>`;
+    }
+    html += `</div>`;
+  }
+
+  // Tasks completed
+  if (data.tasks_completed?.length) {
+    const byProj = groupBy(data.tasks_completed, (t) => t.project_name || "Unknown");
+    html += `<div class="section"><div class="section-title">Tasks completed</div>`;
+    for (const [pname, tasks] of Object.entries(byProj)) {
+      html += `<div class="project-group">`;
+      html += `<div class="project-group-header">${esc(pname)}</div>`;
+      for (const t of tasks) {
+        html += `<div class="item"><span class="check">&#10003;</span> ${esc(t.title)}</div>`;
+      }
+      html += `</div>`;
+    }
+    html += `</div>`;
+  }
+
+  if (!data.by_project?.length && !data.tasks_completed?.length) {
+    html += `<p class="empty">No activity this week.</p>`;
+  }
+
+  content.innerHTML = html;
+
+  // Wire up week navigation
+  $("#week-prev")?.addEventListener("click", () => {
+    weeksBack++;
+    loadTab("weekly");
+  });
+  $("#week-next")?.addEventListener("click", () => {
+    if (weeksBack > 0) {
+      weeksBack--;
+      loadTab("weekly");
+    }
+  });
+}
+
+// --- Tab loading ---
+
+async function loadTab(tab) {
+  currentTab = tab;
+
+  // Update active tab button
+  for (const btn of $$(".tab")) {
+    btn.classList.toggle("active", btn.dataset.tab === tab);
+  }
+
+  content.innerHTML = `<p class="loading">Loading...</p>`;
+
+  try {
+    if (tab === "summary") {
+      renderSummary(await api("/summary"));
+    } else if (tab === "today") {
+      renderToday(await api("/summary/today"));
+    } else if (tab === "weekly") {
+      renderWeekly(await api(`/summary/weekly?weeks_back=${weeksBack}`));
+    }
+  } catch (err) {
+    content.innerHTML = `<p class="error">Failed to load: ${esc(err.message)}</p>`;
+  }
+}
+
+// --- Search ---
+
+function highlight(snippet) {
+  return esc(snippet).replace(/&gt;&gt;&gt;/g, "<mark>").replace(/&lt;&lt;&lt;/g, "</mark>");
+}
+
+const TYPE_ORDER = ["project", "goal", "task", "work_log_entry"];
+const TYPE_LABELS = {
+  project: "Projects",
+  goal: "Goals",
+  task: "Tasks",
+  work_log_entry: "Work log",
+};
+
+function renderSearch(data) {
+  if (!data.results?.length) {
+    content.innerHTML = `<p class="empty">No results for "${esc(data.query)}".</p>`;
+    return;
+  }
+
+  const grouped = groupBy(data.results, (r) => r.entity_type);
+
+  let html = `<div class="search-header">${data.total} results</div>`;
+  for (const type of TYPE_ORDER) {
+    const results = grouped[type];
+    if (!results) continue;
+    html += `<div class="section"><div class="section-title">${TYPE_LABELS[type]}</div>`;
+    for (const r of results) {
+      const body = r.body_snippet?.trim();
+      if (r.entity_type === "work_log_entry") {
+        const projPart = r.project_name ? `<span class="search-project">${esc(r.project_name)}</span>` : "";
+        const timePart = r.created_at ? time(r.created_at) : "";
+        const meta = [projPart, timePart].filter(Boolean).join(" \u00b7 ");
+        html += `
+          <div class="search-result">
+            <div class="search-log-text">${highlight(r.title_snippet)}</div>
+            ${meta ? `<div class="item-meta">${meta}</div>` : ""}
+          </div>`;
+      } else {
+        const projectNote = r.project_name ? `<div class="item-meta"><span class="search-project">${esc(r.project_name)}</span></div>` : "";
+        html += `
+          <div class="search-result">
+            <div class="item-title">${highlight(r.title_snippet)}</div>
+            ${body && body !== "{}" ? `<div class="item-meta">${highlight(body)}</div>` : ""}
+            ${projectNote}
+          </div>`;
+      }
+    }
+    html += `</div>`;
+  }
+  content.innerHTML = html;
+}
+
+let searchTimeout = null;
+
+function onSearchInput(e) {
+  const query = e.target.value.trim();
+  clearTimeout(searchTimeout);
+
+  if (!query) {
+    // Clear active tab highlight and reload current tab
+    loadTab(currentTab);
+    return;
+  }
+
+  // Deactivate tab buttons while searching
+  for (const btn of $$(".tab")) btn.classList.remove("active");
+
+  searchTimeout = setTimeout(async () => {
+    content.innerHTML = `<p class="loading">Searching...</p>`;
+    try {
+      const data = await api(`/search?q=${encodeURIComponent(query)}&limit=20`);
+      renderSearch(data);
+    } catch (err) {
+      content.innerHTML = `<p class="error">Search failed: ${esc(err.message)}</p>`;
+    }
+  }, 300);
+}
+
+// --- Theme toggle ---
+
+function getSystemTheme() {
+  return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+}
+
+function setTheme(theme) {
+  document.documentElement.setAttribute("data-theme", theme);
+  $("#theme-toggle").textContent = theme === "dark" ? "\u2600" : "\u263E";
+}
+
+// Apply saved theme or follow system
+setTheme(localStorage.getItem("logbook-theme") || getSystemTheme());
+
+// Follow system changes when no manual override
+window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => {
+  if (!localStorage.getItem("logbook-theme")) setTheme(getSystemTheme());
+});
+
+$("#theme-toggle").addEventListener("click", () => {
+  const current = document.documentElement.getAttribute("data-theme");
+  const next = current === "dark" ? "light" : "dark";
+  localStorage.setItem("logbook-theme", next);
+  setTheme(next);
+});
+
+// --- Init ---
+
+for (const btn of $$(".tab")) {
+  btn.addEventListener("click", () => {
+    $("#search-input").value = "";
+    if (btn.dataset.tab === "weekly") weeksBack = 0;
+    loadTab(btn.dataset.tab);
+  });
+}
+
+$("#search-input").addEventListener("input", onSearchInput);
+
+loadTab("summary");

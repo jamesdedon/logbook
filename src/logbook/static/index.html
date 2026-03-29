@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Logbook</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header>
+    <h1>Logbook</h1>
+    <nav>
+      <button class="tab active" data-tab="summary">Summary</button>
+      <button class="tab" data-tab="today">Today</button>
+      <button class="tab" data-tab="weekly">Weekly</button>
+    </nav>
+    <div class="header-right">
+      <input id="search-input" type="text" placeholder="Search..." />
+      <button id="theme-toggle" title="Toggle theme">&#9790;</button>
+    </div>
+  </header>
+  <main id="content">
+    <p class="loading">Loading...</p>
+  </main>
+  <script src="app.js"></script>
+</body>
+</html>
