@@ -43,11 +43,11 @@ def _system_timezone() -> str:
 
 
 class Settings(BaseSettings):
-    db_path: str = "/data/logbook.db"
+    db_path: str = os.path.join(os.path.expanduser("~"), "logbook", "logbook.db")
     host: str = "0.0.0.0"
     port: int = 8000
     timezone: str = _system_timezone()
-    project_dir: str = os.path.join(os.path.expanduser("~"), "projects", "logbook")
+    project_dir: str = os.path.join(os.path.expanduser("~"), "logbook")
 
     model_config = {"env_prefix": "LOGBOOK_"}
 

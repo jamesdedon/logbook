@@ -646,9 +646,17 @@ def install_service():
         unit_path = os.path.join(unit_dir, "logbook.service")
         os.makedirs(unit_dir, exist_ok=True)
 
-        uvicorn_path = subprocess.run(
+        # Try to find uvicorn in PATH, fallback to python -m uvicorn
+        uvicorn_result = subprocess.run(
             ["which", "uvicorn"], capture_output=True, text=True
-        ).stdout.strip()
+        )
+        uvicorn_path = uvicorn_result.stdout.strip()
+
+        if not uvicorn_path:
+            # Fallback: use python -m uvicorn
+            exec_start = f"{sys.executable} -m uvicorn logbook.main:app --host {settings.host} --port {settings.port}"
+        else:
+            exec_start = f"{uvicorn_path} logbook.main:app --host {settings.host} --port {settings.port}"
 
         unit = f"""[Unit]
 Description=Logbook API Server
@@ -657,7 +665,7 @@ After=network.target
 [Service]
 Type=simple
 Environment=LOGBOOK_DB_PATH={settings.db_path}
-ExecStart={uvicorn_path} logbook.main:app --host {settings.host} --port {settings.port}
+ExecStart={exec_start}
 Restart=on-failure
 
 [Install]
@@ -677,12 +685,28 @@ WantedBy=default.target
         plist_path = os.path.join(plist_dir, f"{label}.plist")
         os.makedirs(plist_dir, exist_ok=True)
 
-        uvicorn_path = subprocess.run(
+        # Try to find uvicorn in PATH, fallback to pipx venv
+        uvicorn_result = subprocess.run(
             ["which", "uvicorn"], capture_output=True, text=True
-        ).stdout.strip()
+        )
+        uvicorn_path = uvicorn_result.stdout.strip()
+
+        if not uvicorn_path:
+            # Fallback: use Python from current interpreter and run uvicorn as module
+            uvicorn_path = sys.executable
 
         log_dir = os.path.expanduser("~/Library/Logs/logbook")
         os.makedirs(log_dir, exist_ok=True)
+
+        # Build ProgramArguments: if using python executable, use -m uvicorn; otherwise use uvicorn directly
+        if uvicorn_path == sys.executable:
+            program_args = f"""        <string>{uvicorn_path}</string>
+        <string>-m</string>
+        <string>uvicorn</string>
+        <string>logbook.main:app</string>"""
+        else:
+            program_args = f"""        <string>{uvicorn_path}</string>
+        <string>logbook.main:app</string>"""
 
         plist = f"""<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
@@ -693,8 +717,7 @@ WantedBy=default.target
     <string>{label}</string>
     <key>ProgramArguments</key>
     <array>
-        <string>{uvicorn_path}</string>
-        <string>logbook.main:app</string>
+{program_args}
         <string>--host</string>
         <string>{settings.host}</string>
         <string>--port</string>
