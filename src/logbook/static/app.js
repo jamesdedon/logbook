@@ -4,6 +4,7 @@ const content = $("#content");
 
 let currentTab = "summary";
 let weeksBack = 0;
+let includeArchived = false;
 
 // --- API ---
 
@@ -163,17 +164,30 @@ async function toggleProjectDetail(card, projectId) {
   }
 }
 
-function renderSummary(data) {
+function renderSummary(data, archivedProjects) {
   let html = "";
 
+  // Include Archived toggle
+  html += `<div class="summary-controls">
+    <label class="toggle-label">
+      <input type="checkbox" id="archived-toggle" ${includeArchived ? "checked" : ""} />
+      Include Archived
+    </label>
+  </div>`;
+
   // Project cards
-  if (data.active_projects?.length) {
+  const projects = data.active_projects || [];
+  const archived = archivedProjects || [];
+  const allProjects = includeArchived ? [...projects, ...archived] : projects;
+
+  if (allProjects.length) {
     html += `<div class="card-grid">`;
-    for (const p of data.active_projects) {
+    for (const p of allProjects) {
       const ts = p.tasks_summary || {};
+      const isArchived = p.status === "archived";
       html += `
-        <div class="card card-clickable" data-project-id="${esc(p.id)}">
-          <h3>${esc(p.name)}</h3>
+        <div class="card card-clickable${isArchived ? " card-archived" : ""}" data-project-id="${esc(p.id)}">
+          <h3>${esc(p.name)}${isArchived ? ' <span class="pill pill-archived">archived</span>' : ""}</h3>
           ${p.motivation ? `<div class="motivation">${esc(p.motivation)}</div>` : ""}
           <div class="pills">
             ${ts.todo ? `<span class="pill pill-todo">${ts.todo} todo</span>` : ""}
@@ -229,6 +243,15 @@ function renderSummary(data) {
       // Don't toggle if clicking inside the detail area
       if (e.target.closest(".card-detail")) return;
       toggleProjectDetail(card, card.dataset.projectId);
+    });
+  }
+
+  // Wire up archived toggle
+  const toggle = $("#archived-toggle");
+  if (toggle) {
+    toggle.addEventListener("change", () => {
+      includeArchived = toggle.checked;
+      loadTab("summary");
     });
   }
 }
@@ -483,7 +506,17 @@ async function loadTab(tab) {
 
   try {
     if (tab === "summary") {
-      renderSummary(await api("/summary"));
+      const summaryData = await api("/summary");
+      let archivedProjects = [];
+      if (includeArchived) {
+        const allProjects = await api("/projects?status=archived");
+        const activeIds = new Set((summaryData.active_projects || []).map((p) => p.id));
+        archivedProjects = (Array.isArray(allProjects) ? allProjects : []).filter((p) => !activeIds.has(p.id)).map((p) => ({
+          id: p.id, name: p.name, motivation: p.motivation || "", status: p.status,
+          goals_active: 0, tasks_summary: {}, blocked_tasks: 0,
+        }));
+      }
+      renderSummary(summaryData, archivedProjects);
     } else if (tab === "today") {
       renderToday(await api("/summary/today"));
     } else if (tab === "weekly") {

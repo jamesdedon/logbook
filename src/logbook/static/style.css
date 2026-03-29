@@ -149,6 +149,38 @@ main {
   padding: 48px;
 }
 
+/* --- Summary controls --- */
+
+.summary-controls {
+  margin-bottom: 1rem;
+}
+
+.toggle-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.9rem;
+  color: var(--text-dim);
+  cursor: pointer;
+}
+
+.toggle-label input[type="checkbox"] {
+  cursor: pointer;
+}
+
+.card-archived {
+  opacity: 0.6;
+}
+
+.pill-archived {
+  background: var(--text-dim);
+  color: var(--bg);
+  font-size: 0.7rem;
+  padding: 0.1rem 0.4rem;
+  border-radius: 4px;
+  vertical-align: middle;
+}
+
 /* --- Cards --- */
 
 .card-grid {
