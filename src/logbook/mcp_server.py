@@ -565,5 +565,11 @@ def logbook_export_weekly(weeks_back: int = 0, project_id: str | None = None) ->
         return resp.text
 
 
-if __name__ == "__main__":
+def main():
+    from setproctitle import setproctitle
+    setproctitle("logbook-mcp")
     mcp.run()
+
+
+if __name__ == "__main__":
+    main()

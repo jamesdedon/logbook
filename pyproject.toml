@@ -31,7 +31,7 @@ dev = [
 
 [project.scripts]
 logbook = "logbook.cli.main:app"
-logbook-mcp = "logbook.mcp_server:mcp.run"
+logbook-mcp = "logbook.mcp_server:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
