@@ -46,10 +46,17 @@ def _render_weekly_markdown(data: dict) -> str:
                 time = _utc_to_local_time(entry.created_at)
                 meta = json.loads(entry.metadata_json) if entry.metadata_json else {}
                 commit_note = ""
-                if meta.get("commit"):
-                    commit_note = f" (`{meta['commit'][:7]}`"
-                    if meta.get("repo"):
-                        commit_note += f" in {meta['repo']}"
+                git = meta.get("git", {})
+                # Support both new nested format and legacy flat format
+                commits = git.get("commits", [])
+                if not commits and meta.get("commit"):
+                    commits = [meta["commit"]]
+                repo = git.get("repo") or meta.get("repo")
+                if commits:
+                    short = ", ".join(f"`{c[:7]}`" for c in commits)
+                    commit_note = f" ({short}"
+                    if repo:
+                        commit_note += f" in {repo}"
                     commit_note += ")"
                 lines.append(f"- **{day}** {time} — {entry.description}{commit_note}")
             lines.append("")

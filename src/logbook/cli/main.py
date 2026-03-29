@@ -353,8 +353,9 @@ def log_entry(
     description: str = typer.Argument(...),
     project: str = typer.Option(None, "--project", help="Project ID"),
     task: str = typer.Option(None, "--task", help="Task ID"),
-    commit: str = typer.Option(None, "--commit"),
+    commit: list[str] = typer.Option(None, "--commit", help="Git commit hash (repeatable)"),
     repo: str = typer.Option(None, "--repo"),
+    branch: str = typer.Option(None, "--branch"),
     json_out: bool = typer.Option(False, "--json"),
 ):
     body: dict = {"description": description}
@@ -362,13 +363,15 @@ def log_entry(
         body["project_id"] = project
     if task:
         body["task_id"] = task
-    metadata = {}
-    if commit:
-        metadata["commit"] = commit
-    if repo:
-        metadata["repo"] = repo
-    if metadata:
-        body["metadata"] = metadata
+    if commit or repo or branch:
+        git_info: dict = {}
+        if repo:
+            git_info["repo"] = repo
+        if branch:
+            git_info["branch"] = branch
+        if commit:
+            git_info["commits"] = list(commit)
+        body["metadata"] = {"git": git_info}
 
     with _client() as c:
         resp = c.post("/log", json=body)

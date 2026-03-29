@@ -191,7 +191,7 @@ def logbook_log(
     description: str,
     project_id: str | None = None,
     task_id: str | None = None,
-    commit: str | None = None,
+    commits: list[str] | None = None,
     repo: str | None = None,
     branch: str | None = None,
 ) -> str:
@@ -201,7 +201,7 @@ def logbook_log(
         description: What was done (be specific and concise)
         project_id: Optional project ID to link this entry to
         task_id: Optional task ID to link this entry to
-        commit: Optional git commit hash
+        commits: Optional list of git commit hashes associated with this work
         repo: Optional repository name
         branch: Optional git branch name
     """
@@ -210,15 +210,15 @@ def logbook_log(
         body["project_id"] = project_id
     if task_id:
         body["task_id"] = task_id
-    metadata = {}
-    if commit:
-        metadata["commit"] = commit
-    if repo:
-        metadata["repo"] = repo
-    if branch:
-        metadata["branch"] = branch
-    if metadata:
-        body["metadata"] = metadata
+    if commits or repo or branch:
+        git_info: dict = {}
+        if repo:
+            git_info["repo"] = repo
+        if branch:
+            git_info["branch"] = branch
+        if commits:
+            git_info["commits"] = commits
+        body["metadata"] = {"git": git_info}
 
     data = _post("/log", body)["data"]
     return f"Logged: {data['description']} (id: {data['id']})"

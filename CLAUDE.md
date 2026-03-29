@@ -70,6 +70,22 @@ Search tests need the FTS5 table and triggers created manually in the fixture si
 8. Add MCP tools to `mcp_server.py`
 9. Add tests
 
+## Logging work with git metadata
+
+After committing code, capture the commit hash from the git output and pass it to `logbook_log` via the `commits` parameter (a list). Also pass `repo` and `branch`. Git metadata is stored nested under a `git` key:
+
+```json
+{"git": {"repo": "logbook", "branch": "master", "commits": ["abc1234", "def5678"]}}
+```
+
+Example flow:
+1. Make changes, commit → get hash like `abc1234`
+2. Log the work: `logbook_log(description="...", project_id="...", commits=["abc1234"], repo="logbook", branch="master")`
+
+Multiple commits can be attached to a single log entry when they represent the same piece of work.
+
+Always include commit metadata when the logged work directly corresponds to a commit. Do not include it for work that has no associated commit (planning, research, etc.).
+
 ## Configuration
 
 All env vars are prefixed `LOGBOOK_`. Key ones: `LOGBOOK_DB_PATH` (database file path), `LOGBOOK_HOST`, `LOGBOOK_PORT`. The CLI and MCP server use `LOGBOOK_URL` (default `http://localhost:8000`).
