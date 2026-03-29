@@ -18,9 +18,9 @@ async def create_project(db: AsyncSession, name: str, description: str = "", mot
 
 async def list_projects(db: AsyncSession, status: str | None = None) -> list[Project]:
     stmt = select(Project)
-    if status:
+    if status and status != "all":
         stmt = stmt.where(Project.status == status)
-    else:
+    elif not status:
         stmt = stmt.where(Project.status == "active")
     stmt = stmt.order_by(Project.created_at.desc())
     result = await db.execute(stmt)

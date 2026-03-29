@@ -143,6 +143,9 @@ logbook export -p <PROJECT> -o standup.md  # single project
 
 # Projects & goals
 logbook project create "my-project" --motivation "why this project exists"
+logbook project archive <ID>          # archive a project
+logbook project unarchive <ID>        # restore an archived project to active
+logbook projects --all                # list all projects including archived
 logbook goal create <PROJECT> "Ship v1" --target 2026-04-15 --motivation "what success looks like"
 
 # Service management

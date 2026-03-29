@@ -55,7 +55,7 @@ def list_projects(
     if ctx.invoked_subcommand is not None:
         return
     with _client() as c:
-        params = {"status": "archived"} if all else {}
+        params = {"status": "all"} if all else {"status": "active"}
         resp = c.get("/projects", params=params)
         _handle_error(resp)
         data = resp.json()
@@ -125,6 +125,14 @@ def project_archive(id: str = typer.Argument(...)):
         resp = c.patch(f"/projects/{id}", json={"status": "archived"})
         _handle_error(resp)
     console.print("[yellow]Archived.[/yellow]")
+
+
+@project_app.command("unarchive")
+def project_unarchive(id: str = typer.Argument(...)):
+    with _client() as c:
+        resp = c.patch(f"/projects/{id}", json={"status": "active"})
+        _handle_error(resp)
+    console.print("[green]Unarchived.[/green]")
 
 
 # --- Goals ---

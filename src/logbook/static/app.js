@@ -405,6 +405,7 @@ function renderHelp() {
     <tr><td><code>logbook project create "name" --motivation "why"</code></td><td>Create a project</td></tr>
     <tr><td><code>logbook project show &lt;ID&gt;</code></td><td>Show project details</td></tr>
     <tr><td><code>logbook project archive &lt;ID&gt;</code></td><td>Archive a project</td></tr>
+    <tr><td><code>logbook project unarchive &lt;ID&gt;</code></td><td>Restore an archived project to active</td></tr>
     <tr><td><code>logbook goal create &lt;PROJECT&gt; "title"</code></td><td>Create a goal (supports --target, --motivation)</td></tr>
     <tr><td><code>logbook goal show &lt;ID&gt;</code></td><td>Show goal details</td></tr>
     <tr><td><code>logbook goal complete &lt;ID&gt;</code></td><td>Mark a goal complete</td></tr>
