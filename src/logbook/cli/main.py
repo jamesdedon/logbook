@@ -573,41 +573,101 @@ def blocked_tasks(json_out: bool = typer.Option(False, "--json")):
         _indent(f"{bt['title']} — waiting on: {blockers}")
 
 
-def _restart_service():
-    """Restart the logbook service using the platform's service manager."""
+def _kill_stale_server(port: int):
+    """Kill any process listening on the given port.
+
+    On macOS, launchctl bootout can leave orphaned server processes that
+    hold the port open.  This ensures a clean slate before starting.
+    """
+    import signal
+    import subprocess
+
+    result = subprocess.run(
+        ["lsof", "-ti", f":{port}"],
+        capture_output=True, text=True,
+    )
+    pids = result.stdout.strip().split()
+    my_pid = str(os.getpid())
+    for pid in pids:
+        if pid and pid != my_pid:
+            try:
+                os.kill(int(pid), signal.SIGTERM)
+                console.print(f"[yellow]Killed stale process {pid} on port {port}[/yellow]")
+            except (ProcessLookupError, PermissionError):
+                pass
+
+
+def _stop_service():
+    """Stop the logbook service and kill any stale processes on the port."""
     import platform
     import subprocess
+
+    from logbook.config import settings
 
     system = platform.system()
 
     if system == "Linux":
-        console.print("[cyan]Restarting logbook service (systemd)...[/cyan]")
-        result = subprocess.run(["systemctl", "--user", "restart", "logbook"], capture_output=True, text=True)
+        console.print("[cyan]Stopping logbook service (systemd)...[/cyan]")
+        subprocess.run(["systemctl", "--user", "stop", "logbook"],
+                       capture_output=True, text=True)
+    elif system == "Darwin":
+        label = "com.logbook.server"
+        plist_path = os.path.expanduser(f"~/Library/LaunchAgents/{label}.plist")
+        console.print("[cyan]Stopping logbook service (launchd)...[/cyan]")
+        # Try unload first (more reliable), fall back to bootout
+        if os.path.exists(plist_path):
+            subprocess.run(["launchctl", "unload", plist_path],
+                           capture_output=True, text=True)
+        else:
+            subprocess.run(["launchctl", "bootout", f"gui/{os.getuid()}", label],
+                           capture_output=True, text=True)
+        _kill_stale_server(settings.port)
+    # Errors ignored — service might not be running
+
+
+def _start_service():
+    """Start the logbook service, killing any stale processes first."""
+    import platform
+    import subprocess
+    import time
+
+    from logbook.config import settings
+
+    system = platform.system()
+
+    if system == "Linux":
+        console.print("[cyan]Starting logbook service (systemd)...[/cyan]")
+        result = subprocess.run(["systemctl", "--user", "start", "logbook"],
+                                capture_output=True, text=True)
         if result.returncode != 0:
-            console.print(f"[red]Restart failed:[/red] {result.stderr.strip()}")
+            console.print(f"[red]Start failed:[/red] {result.stderr.strip()}")
             raise typer.Exit(1)
     elif system == "Darwin":
         label = "com.logbook.server"
-        console.print("[cyan]Restarting logbook service (launchd)...[/cyan]")
-        # Stop if running, ignore errors if not loaded
-        subprocess.run(["launchctl", "bootout", f"gui/{os.getuid()}", label],
-                       capture_output=True, text=True)
         plist_path = os.path.expanduser(f"~/Library/LaunchAgents/{label}.plist")
         if not os.path.exists(plist_path):
             console.print(f"[red]No launchd plist found at {plist_path}[/red]")
             console.print("Run [bold]logbook install-service[/bold] first.")
             raise typer.Exit(1)
-        result = subprocess.run(["launchctl", "bootstrap", f"gui/{os.getuid()}", plist_path],
+        _kill_stale_server(settings.port)
+        console.print("[cyan]Starting logbook service (launchd)...[/cyan]")
+        result = subprocess.run(["launchctl", "load", plist_path],
                                 capture_output=True, text=True)
         if result.returncode != 0:
-            console.print(f"[red]Restart failed:[/red] {result.stderr.strip()}")
+            console.print(f"[red]Start failed:[/red] {result.stderr.strip()}")
             raise typer.Exit(1)
     else:
         console.print(f"[red]Unsupported platform: {system}[/red]")
         console.print("Start the server manually: uvicorn logbook.main:app --host 127.0.0.1 --port 8000")
         raise typer.Exit(1)
 
-    console.print("[green]Logbook service restarted.[/green]")
+    console.print("[green]Logbook service started.[/green]")
+
+
+def _restart_service():
+    """Restart the logbook service using the platform's service manager."""
+    _stop_service()
+    _start_service()
 
 
 @app.command("restart")
@@ -674,6 +734,9 @@ WantedBy=default.target
         with open(unit_path, "w") as f:
             f.write(unit)
         subprocess.run(["systemctl", "--user", "daemon-reload"], check=True)
+        # Stop existing service if running (systemd kills the tracked PID)
+        subprocess.run(["systemctl", "--user", "stop", "logbook"],
+                       capture_output=True, text=True)
         subprocess.run(["systemctl", "--user", "enable", "logbook"], check=True)
         subprocess.run(["systemctl", "--user", "start", "logbook"], check=True)
         console.print(f"[green]Installed and started systemd service.[/green]")
@@ -741,7 +804,11 @@ WantedBy=default.target
 """
         with open(plist_path, "w") as f:
             f.write(plist)
-        subprocess.run(["launchctl", "bootstrap", f"gui/{os.getuid()}", plist_path],
+        # Stop existing service and kill any orphaned processes on the port
+        subprocess.run(["launchctl", "unload", plist_path],
+                       capture_output=True, text=True)
+        _kill_stale_server(settings.port)
+        subprocess.run(["launchctl", "load", plist_path],
                        capture_output=True, text=True)
         console.print(f"[green]Installed and started launchd service.[/green]")
         console.print(f"  Plist: {plist_path}")
@@ -790,11 +857,7 @@ def import_db(
         console.print(f"[yellow]WAL checkpoint skipped:[/yellow] {e}")
 
     # Stop the service before replacing the file
-    console.print("[cyan]Stopping service...[/cyan]")
-    try:
-        _restart_service()
-    except SystemExit:
-        pass  # Service might not be running
+    _stop_service()
 
     # Ensure destination directory exists
     os.makedirs(os.path.dirname(dest_path) or ".", exist_ok=True)
@@ -809,8 +872,8 @@ def import_db(
     shutil.copy2(source_path, dest_path)
     console.print(f"[green]Database imported to {dest_path}[/green]")
 
-    # Restart
-    _restart_service()
+    # Start the service back up
+    _start_service()
 
 
 @app.command("backup")
