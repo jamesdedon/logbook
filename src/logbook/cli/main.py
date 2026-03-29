@@ -729,6 +729,99 @@ WantedBy=default.target
         raise typer.Exit(1)
 
 
+@app.command("import-db")
+def import_db(
+    source: str = typer.Argument(..., help="Path to the database file to import"),
+):
+    """Import a logbook database file, replacing the current one.
+
+    Stops the service, checkpoints the source WAL, copies it to the
+    configured LOGBOOK_DB_PATH location, and restarts the service.
+    """
+    import shutil
+    import sqlite3 as stdlib_sqlite
+    import subprocess
+
+    from logbook.config import settings
+
+    source_path = os.path.expanduser(source)
+    if not os.path.exists(source_path):
+        console.print(f"[red]File not found:[/red] {source_path}")
+        raise typer.Exit(1)
+
+    dest_path = settings.db_path
+    console.print(f"Source:      {source_path}")
+    console.print(f"Destination: {dest_path}")
+
+    if os.path.abspath(source_path) == os.path.abspath(dest_path):
+        console.print("[yellow]Source and destination are the same file.[/yellow]")
+        raise typer.Exit(1)
+
+    # Checkpoint the source WAL so we get a clean single file
+    try:
+        conn = stdlib_sqlite.connect(source_path)
+        conn.execute("PRAGMA wal_checkpoint(TRUNCATE);")
+        conn.close()
+        console.print("[green]Source WAL checkpointed.[/green]")
+    except Exception as e:
+        console.print(f"[yellow]WAL checkpoint skipped:[/yellow] {e}")
+
+    # Stop the service before replacing the file
+    console.print("[cyan]Stopping service...[/cyan]")
+    try:
+        _restart_service()
+    except SystemExit:
+        pass  # Service might not be running
+
+    # Ensure destination directory exists
+    os.makedirs(os.path.dirname(dest_path) or ".", exist_ok=True)
+
+    # Remove old WAL/SHM files at destination
+    for suffix in ("-wal", "-shm"):
+        old = dest_path + suffix
+        if os.path.exists(old):
+            os.remove(old)
+
+    # Copy
+    shutil.copy2(source_path, dest_path)
+    console.print(f"[green]Database imported to {dest_path}[/green]")
+
+    # Restart
+    _restart_service()
+
+
+@app.command("backup")
+def backup(
+    output: str = typer.Argument(..., help="Path to save the backup"),
+):
+    """Create a clean backup of the current database.
+
+    Checkpoints the WAL first so the backup is a single self-contained file.
+    """
+    import shutil
+    import sqlite3 as stdlib_sqlite
+
+    from logbook.config import settings
+
+    source_path = settings.db_path
+    output_path = os.path.expanduser(output)
+
+    if not os.path.exists(source_path):
+        console.print(f"[red]Database not found:[/red] {source_path}")
+        raise typer.Exit(1)
+
+    # Checkpoint WAL
+    try:
+        conn = stdlib_sqlite.connect(source_path)
+        conn.execute("PRAGMA wal_checkpoint(TRUNCATE);")
+        conn.close()
+    except Exception as e:
+        console.print(f"[yellow]WAL checkpoint skipped:[/yellow] {e}")
+
+    shutil.copy2(source_path, output_path)
+    console.print(f"[green]Backup saved to {output_path}[/green]")
+
+
 @app.command("search")
 def search_cmd(
     query: str = typer.Argument(..., help="Search keywords"),
