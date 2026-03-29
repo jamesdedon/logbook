@@ -48,8 +48,14 @@ class Settings(BaseSettings):
     port: int = 8000
     timezone: str = _system_timezone()
     project_dir: str = os.path.join(os.path.expanduser("~"), "logbook")
+    backup_path: str = "/mnt/nas-james/logbook"
 
-    model_config = {"env_prefix": "LOGBOOK_"}
+    model_config = {
+        "env_prefix": "LOGBOOK_",
+        "env_file": os.path.join(os.path.expanduser("~"), "logbook", ".env"),
+        "env_file_encoding": "utf-8",
+        "extra": "ignore",
+    }
 
     @property
     def tz(self) -> ZoneInfo:

@@ -670,6 +670,136 @@ def _restart_service():
     _start_service()
 
 
+@app.command("doctor")
+def doctor():
+    """Check the health of the logbook installation."""
+    import platform
+    import subprocess
+
+    import httpx
+
+    from logbook.config import settings
+
+    system = platform.system()
+    ok_count = 0
+    warn_count = 0
+    fail_count = 0
+
+    def _pass(msg: str):
+        nonlocal ok_count
+        ok_count += 1
+        console.print(f"  [green]✓[/green] {msg}")
+
+    def _warn(msg: str):
+        nonlocal warn_count
+        warn_count += 1
+        console.print(f"  [yellow]![/yellow] {msg}")
+
+    def _fail(msg: str):
+        nonlocal fail_count
+        fail_count += 1
+        console.print(f"  [red]✗[/red] {msg}")
+
+    console.print(f"[bold]Platform:[/bold] {system}")
+    console.print()
+
+    # 1. Python & uvicorn
+    console.print("[bold]Runtime[/bold]")
+    _pass(f"Python: {sys.executable}")
+    result = subprocess.run(
+        [sys.executable, "-m", "uvicorn", "--version"],
+        capture_output=True, text=True,
+    )
+    if result.returncode == 0:
+        _pass(f"uvicorn: {result.stdout.strip()}")
+    else:
+        _fail("uvicorn not found — run: pip install uvicorn")
+    console.print()
+
+    # 2. Service file
+    console.print("[bold]Service[/bold]")
+    if system == "Linux":
+        unit_path = os.path.expanduser("~/.config/systemd/user/logbook.service")
+        if os.path.exists(unit_path):
+            _pass(f"Unit file: {unit_path}")
+        else:
+            _fail(f"No unit file at {unit_path} — run: logbook install-service")
+
+        result = subprocess.run(
+            ["systemctl", "--user", "is-active", "logbook"],
+            capture_output=True, text=True,
+        )
+        if result.stdout.strip() == "active":
+            _pass("Service is running")
+        else:
+            _fail(f"Service not running (status: {result.stdout.strip()}) — run: logbook install-service")
+
+    elif system == "Darwin":
+        label = "com.logbook.server"
+        plist_path = os.path.expanduser(f"~/Library/LaunchAgents/{label}.plist")
+        if os.path.exists(plist_path):
+            _pass(f"Plist: {plist_path}")
+        else:
+            _fail(f"No plist at {plist_path} — run: logbook install-service")
+
+        result = subprocess.run(
+            ["launchctl", "list"],
+            capture_output=True, text=True,
+        )
+        if label in result.stdout:
+            _pass("Service is loaded")
+        else:
+            _fail("Service not loaded — run: logbook install-service")
+    else:
+        _warn(f"Unknown platform: {system}")
+    console.print()
+
+    # 3. Database
+    console.print("[bold]Database[/bold]")
+    if os.path.exists(settings.db_path):
+        if os.access(settings.db_path, os.W_OK):
+            _pass(f"Database: {settings.db_path}")
+        else:
+            _fail(f"Database not writable: {settings.db_path}")
+    else:
+        _pass(f"Database: not at default path ({settings.db_path}) — checking via health endpoint")
+    console.print()
+
+    # 4. Port
+    console.print("[bold]Network[/bold]")
+    port_result = subprocess.run(
+        ["lsof", "-ti", f":{settings.port}"],
+        capture_output=True, text=True,
+    )
+    pids = [p for p in port_result.stdout.strip().split() if p]
+    if pids:
+        _pass(f"Port {settings.port} in use (PID: {', '.join(pids)})")
+    else:
+        _warn(f"Nothing listening on port {settings.port}")
+
+    # 5. Health endpoint — the definitive check that everything works
+    try:
+        resp = httpx.get(f"http://localhost:{settings.port}/health", timeout=3)
+        if resp.status_code == 200:
+            _pass(f"Health endpoint OK (http://localhost:{settings.port}/health)")
+        else:
+            _fail(f"Health endpoint returned {resp.status_code}")
+    except httpx.ConnectError:
+        _fail(f"Cannot connect to http://localhost:{settings.port}/health")
+    except httpx.TimeoutException:
+        _fail(f"Health endpoint timed out")
+    console.print()
+
+    # Summary
+    if fail_count == 0 and warn_count == 0:
+        console.print("[bold green]All checks passed.[/bold green]")
+    elif fail_count == 0:
+        console.print(f"[bold yellow]{ok_count} passed, {warn_count} warning(s)[/bold yellow]")
+    else:
+        console.print(f"[bold red]{ok_count} passed, {fail_count} failed, {warn_count} warning(s)[/bold red]")
+        raise typer.Exit(1)
+
+
 @app.command("restart")
 def restart():
     """Reinstall the logbook package and restart the service."""
@@ -701,22 +831,48 @@ def install_service():
 
     system = platform.system()
 
+    # Pre-flight checks
+    console.print("[cyan]Running pre-flight checks...[/cyan]")
+
+    # Verify uvicorn is available in this Python environment
+    result = subprocess.run(
+        [sys.executable, "-m", "uvicorn", "--version"],
+        capture_output=True, text=True,
+    )
+    if result.returncode != 0:
+        console.print(f"[red]uvicorn not found in {sys.executable}[/red]")
+        console.print("Install it with: pip install uvicorn")
+        raise typer.Exit(1)
+    console.print(f"  [green]✓[/green] uvicorn available ({result.stdout.strip()})")
+
+    # Ensure database directory exists
+    db_dir = os.path.dirname(settings.db_path) or "."
+    try:
+        os.makedirs(db_dir, exist_ok=True)
+        console.print(f"  [green]✓[/green] Database directory exists ({db_dir})")
+    except OSError as e:
+        console.print(f"[red]Cannot create database directory {db_dir}:[/red] {e}")
+        raise typer.Exit(1)
+
+    # Check if port is already in use by a non-logbook process
+    port_result = subprocess.run(
+        ["lsof", "-ti", f":{settings.port}"],
+        capture_output=True, text=True,
+    )
+    if port_result.stdout.strip():
+        pids = port_result.stdout.strip().split()
+        console.print(f"  [yellow]![/yellow] Port {settings.port} in use (PID: {', '.join(pids)}) — will be replaced")
+    else:
+        console.print(f"  [green]✓[/green] Port {settings.port} available")
+
+    console.print()
+
     if system == "Linux":
         unit_dir = os.path.expanduser("~/.config/systemd/user")
         unit_path = os.path.join(unit_dir, "logbook.service")
         os.makedirs(unit_dir, exist_ok=True)
 
-        # Try to find uvicorn in PATH, fallback to python -m uvicorn
-        uvicorn_result = subprocess.run(
-            ["which", "uvicorn"], capture_output=True, text=True
-        )
-        uvicorn_path = uvicorn_result.stdout.strip()
-
-        if not uvicorn_path:
-            # Fallback: use python -m uvicorn
-            exec_start = f"{sys.executable} -m uvicorn logbook.main:app --host {settings.host} --port {settings.port}"
-        else:
-            exec_start = f"{uvicorn_path} logbook.main:app --host {settings.host} --port {settings.port}"
+        exec_start = f"{sys.executable} -m uvicorn logbook.main:app --host {settings.host} --port {settings.port}"
 
         unit = f"""[Unit]
 Description=Logbook API Server
@@ -748,27 +904,12 @@ WantedBy=default.target
         plist_path = os.path.join(plist_dir, f"{label}.plist")
         os.makedirs(plist_dir, exist_ok=True)
 
-        # Try to find uvicorn in PATH, fallback to pipx venv
-        uvicorn_result = subprocess.run(
-            ["which", "uvicorn"], capture_output=True, text=True
-        )
-        uvicorn_path = uvicorn_result.stdout.strip()
-
-        if not uvicorn_path:
-            # Fallback: use Python from current interpreter and run uvicorn as module
-            uvicorn_path = sys.executable
-
         log_dir = os.path.expanduser("~/Library/Logs/logbook")
         os.makedirs(log_dir, exist_ok=True)
 
-        # Build ProgramArguments: if using python executable, use -m uvicorn; otherwise use uvicorn directly
-        if uvicorn_path == sys.executable:
-            program_args = f"""        <string>{uvicorn_path}</string>
+        program_args = f"""        <string>{sys.executable}</string>
         <string>-m</string>
         <string>uvicorn</string>
-        <string>logbook.main:app</string>"""
-        else:
-            program_args = f"""        <string>{uvicorn_path}</string>
         <string>logbook.main:app</string>"""
 
         plist = f"""<?xml version="1.0" encoding="UTF-8"?>
@@ -878,11 +1019,12 @@ def import_db(
 
 @app.command("backup")
 def backup(
-    output: str = typer.Argument(..., help="Path to save the backup"),
+    output: str = typer.Argument(None, help="Path to save the backup (default: configured backup_path)"),
 ):
     """Create a clean backup of the current database.
 
     Checkpoints the WAL first so the backup is a single self-contained file.
+    Uses the configured backup_path when no output path is given.
     """
     import shutil
     import sqlite3 as stdlib_sqlite
@@ -890,7 +1032,16 @@ def backup(
     from logbook.config import settings
 
     source_path = settings.db_path
-    output_path = os.path.expanduser(output)
+
+    if output:
+        output_path = os.path.expanduser(output)
+    else:
+        backup_dir = settings.backup_path
+        if not os.path.isdir(backup_dir):
+            console.print(f"[red]Backup directory not found:[/red] {backup_dir}")
+            console.print("Set it with: logbook config set backup_path /your/path")
+            raise typer.Exit(1)
+        output_path = os.path.join(backup_dir, "logbook.db")
 
     if not os.path.exists(source_path):
         console.print(f"[red]Database not found:[/red] {source_path}")
@@ -906,6 +1057,150 @@ def backup(
 
     shutil.copy2(source_path, output_path)
     console.print(f"[green]Backup saved to {output_path}[/green]")
+
+
+@app.command("config")
+def config_show():
+    """Show current configuration."""
+    from logbook.config import settings
+
+    table = Table(title="Logbook Configuration", show_header=True)
+    table.add_column("Setting", style="bold")
+    table.add_column("Value")
+    table.add_column("Source")
+
+    env_file = os.path.join(os.path.expanduser("~"), "logbook", ".env")
+    env_values = {}
+    if os.path.exists(env_file):
+        with open(env_file) as f:
+            for line in f:
+                line = line.strip()
+                if line and not line.startswith("#") and "=" in line:
+                    k, v = line.split("=", 1)
+                    env_values[k.strip()] = v.strip()
+
+    for name in ("db_path", "backup_path", "host", "port", "timezone", "project_dir"):
+        value = str(getattr(settings, name))
+        env_key = f"LOGBOOK_{name.upper()}"
+        if env_key in os.environ:
+            source = "env var"
+        elif env_key in env_values:
+            source = ".env file"
+        else:
+            source = "default"
+        table.add_row(name, value, source)
+
+    console.print(table)
+    console.print(f"\n[dim]Config file: {env_file}[/dim]")
+
+
+@app.command("config-set")
+def config_set(
+    key: str = typer.Argument(..., help="Setting name (e.g. backup_path)"),
+    value: str = typer.Argument(..., help="Value to set"),
+):
+    """Set a configuration value in the .env file."""
+    from logbook.config import Settings
+
+    valid_keys = {f.alias or name for name, f in Settings.model_fields.items()}
+    if key not in valid_keys:
+        console.print(f"[red]Unknown setting:[/red] {key}")
+        console.print(f"Valid settings: {', '.join(sorted(valid_keys))}")
+        raise typer.Exit(1)
+
+    env_key = f"LOGBOOK_{key.upper()}"
+    env_file = os.path.join(os.path.expanduser("~"), "logbook", ".env")
+    os.makedirs(os.path.dirname(env_file), exist_ok=True)
+
+    # Read existing lines
+    lines = []
+    if os.path.exists(env_file):
+        with open(env_file) as f:
+            lines = f.readlines()
+
+    # Update or append
+    found = False
+    for i, line in enumerate(lines):
+        if line.strip().startswith(f"{env_key}="):
+            lines[i] = f"{env_key}={value}\n"
+            found = True
+            break
+
+    if not found:
+        lines.append(f"{env_key}={value}\n")
+
+    with open(env_file, "w") as f:
+        f.writelines(lines)
+
+    console.print(f"[green]Set {key} = {value}[/green]")
+    console.print(f"[dim]Written to {env_file}[/dim]")
+
+
+@app.command("restore")
+def restore(
+    source: str = typer.Argument(None, help="Path to the database file to restore (default: configured backup_path)"),
+):
+    """Restore the database from a backup.
+
+    Stops the service, replaces the current database with the backup,
+    and restarts the service. Uses the configured backup_path when no
+    source path is given.
+    """
+    import shutil
+    import sqlite3 as stdlib_sqlite
+    import subprocess
+
+    from logbook.config import settings
+
+    if source:
+        source_path = os.path.expanduser(source)
+    else:
+        backup_dir = settings.backup_path
+        source_path = os.path.join(backup_dir, "logbook.db")
+
+    if not os.path.exists(source_path):
+        if source:
+            console.print(f"[red]File not found:[/red] {source_path}")
+        else:
+            console.print(f"[red]No backup found at:[/red] {source_path}")
+            console.print("Set backup path with: logbook config set backup_path /your/path")
+        raise typer.Exit(1)
+
+    dest_path = settings.db_path
+    console.print(f"Source:      {source_path}")
+    console.print(f"Destination: {dest_path}")
+
+    if os.path.abspath(source_path) == os.path.abspath(dest_path):
+        console.print("[yellow]Source and destination are the same file.[/yellow]")
+        raise typer.Exit(1)
+
+    # Checkpoint the source WAL so we get a clean single file
+    try:
+        conn = stdlib_sqlite.connect(source_path)
+        conn.execute("PRAGMA wal_checkpoint(TRUNCATE);")
+        conn.close()
+        console.print("[green]Source WAL checkpointed.[/green]")
+    except Exception as e:
+        console.print(f"[yellow]WAL checkpoint skipped:[/yellow] {e}")
+
+    # Stop the service before replacing the file
+    _stop_service()
+
+    # Ensure destination directory exists
+    os.makedirs(os.path.dirname(dest_path) or ".", exist_ok=True)
+
+    # Remove old WAL/SHM files at destination
+    for suffix in ("-wal", "-shm"):
+        old = dest_path + suffix
+        if os.path.exists(old):
+            os.remove(old)
+
+    # Copy
+    shutil.copy2(source_path, dest_path)
+    console.print(f"[green]Database restored from {source_path}[/green]")
+
+    # Start the service back up
+    _start_service()
 
 
 @app.command("search")
