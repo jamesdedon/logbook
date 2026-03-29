@@ -79,12 +79,6 @@ logbook install-service
 
 This creates the appropriate service file for your platform and starts the server. It will restart automatically on boot.
 
-**With Docker/Podman:**
-
-```bash
-docker compose up -d --build
-```
-
 ### Verify it's running
 
 ```bash
