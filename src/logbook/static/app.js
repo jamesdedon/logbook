@@ -364,6 +364,77 @@ function renderWeekly(data) {
   });
 }
 
+// --- Help ---
+
+function renderHelp() {
+  content.innerHTML = `
+<div class="help">
+  <h2>Getting started</h2>
+  <p>Logbook is a local work journal and planning tool. It runs on your machine, stores everything in a SQLite file, and is designed to work with Claude Code.</p>
+
+  <h2>Dashboard tabs</h2>
+  <dl>
+    <dt>Summary</dt>
+    <dd>Project cards with task counts. Click a card to expand and see its tasks, rationale, and recent work log.</dd>
+    <dt>Today</dt>
+    <dd>Timeline of today's logged work and completed tasks, grouped by project.</dd>
+    <dt>Weekly</dt>
+    <dd>Stats bar, entries grouped by project and day, completed tasks. Use the prev/next arrows to navigate weeks.</dd>
+  </dl>
+
+  <h2>Search</h2>
+  <p>Type in the search box to search across projects, goals, tasks, and work log entries. Supports prefix matching and phrase search (<code>"exact phrase"</code>).</p>
+
+  <h2>CLI commands</h2>
+  <table>
+    <tr><td><code>logbook log "description"</code></td><td>Log work</td></tr>
+    <tr><td><code>logbook tasks</code></td><td>List active tasks</td></tr>
+    <tr><td><code>logbook task create &lt;PROJECT&gt; "title" --priority high</code></td><td>Create a task</td></tr>
+    <tr><td><code>logbook task done &lt;ID&gt;</code></td><td>Complete a task</td></tr>
+    <tr><td><code>logbook summary</code></td><td>Full overview</td></tr>
+    <tr><td><code>logbook today</code></td><td>Today's activity</td></tr>
+    <tr><td><code>logbook next</code></td><td>What to work on next</td></tr>
+    <tr><td><code>logbook blocked</code></td><td>Blocked tasks</td></tr>
+    <tr><td><code>logbook weekly</code></td><td>Weekly report</td></tr>
+    <tr><td><code>logbook search "keyword"</code></td><td>Search everything</td></tr>
+    <tr><td><code>logbook export -o report.md</code></td><td>Export weekly as markdown</td></tr>
+    <tr><td><code>logbook project create "name" --motivation "why"</code></td><td>Create a project</td></tr>
+    <tr><td><code>logbook goal create &lt;PROJECT&gt; "title"</code></td><td>Create a goal</td></tr>
+    <tr><td><code>logbook backup /path/to/backup.db</code></td><td>Backup the database</td></tr>
+    <tr><td><code>logbook import-db /path/to/file.db</code></td><td>Import a database</td></tr>
+    <tr><td><code>logbook restart</code></td><td>Reinstall and restart service</td></tr>
+    <tr><td><code>logbook install-service</code></td><td>Install as system service</td></tr>
+  </table>
+  <p>All commands support <code>--json</code> for machine-readable output.</p>
+
+  <h2>Claude Code integration</h2>
+  <p>Connect once with:</p>
+  <pre>claude mcp add logbook -s user -e LOGBOOK_URL=http://localhost:8000 -- logbook-mcp</pre>
+  <p>Then just talk naturally — "What's on my plate?", "Log that we finished the refactor", "What did I do last week?"</p>
+
+  <h2>How information is organized</h2>
+  <dl>
+    <dt>Projects</dt>
+    <dd>Top-level containers for related work. Each has an optional motivation field.</dd>
+    <dt>Goals</dt>
+    <dd>Milestones within a project (e.g. "Ship v1"). Optional motivation and target date.</dd>
+    <dt>Tasks</dt>
+    <dd>Concrete work items with priority (low/medium/high/critical), rationale, and dependencies. A task is "blocked" when it depends on an unfinished task.</dd>
+    <dt>Log entries</dt>
+    <dd>Timestamped records of work done. Can link to a project and task, and include git commit metadata.</dd>
+  </dl>
+
+  <h2>Priorities &amp; next actions</h2>
+  <p>The <strong>next</strong> command ranks unblocked tasks by: priority first, then how many other tasks they unblock, then age. Everything it suggests is actionable right now.</p>
+
+  <h2>Data &amp; backups</h2>
+  <p>Everything lives in a single <code>logbook.db</code> file. No cloud, no sync. Use <code>logbook backup</code> to create a clean copy, or <code>logbook import-db</code> to restore one.</p>
+
+  <h2>API</h2>
+  <p>REST API at <code>http://localhost:8000</code>. OpenAPI docs at <a href="/docs">/docs</a>. All responses use <code>{"data": ..., "meta": ...}</code> envelope.</p>
+</div>`;
+}
+
 // --- Tab loading ---
 
 async function loadTab(tab) {
@@ -383,6 +454,12 @@ async function loadTab(tab) {
       renderToday(await api("/summary/today"));
     } else if (tab === "weekly") {
       renderWeekly(await api(`/summary/weekly?weeks_back=${weeksBack}`));
+    } else if (tab === "help") {
+      renderHelp();
+      return;
+    } else if (tab === "api") {
+      content.innerHTML = `<iframe src="/docs" class="api-frame"></iframe>`;
+      return;
     }
   } catch (err) {
     content.innerHTML = `<p class="error">Failed to load: ${esc(err.message)}</p>`;
