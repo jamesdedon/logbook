@@ -1,6 +1,6 @@
 # Logbook
 
-Local-first agentic work journal and planning tool. Runs on your computer with a REST API designed for AI agent consumption. Terminal-first — no web UI needed.
+Local-first agentic work journal and planning tool. Runs on your computer with a REST API designed for AI agent consumption. Includes a CLI, MCP server for Claude Code, and a web dashboard.
 
 ## What is Logbook?
 
@@ -18,30 +18,36 @@ Logbook solves this by:
 
 - **Recording work as it happens.** Claude logs what it did after completing tasks, so you have a running record without doing anything.
 - **Helping you plan.** You can create projects, set goals, and break work into tasks with priorities. Claude can check what's next and suggest what to work on.
+- **Capturing intent.** Projects and goals have a motivation field, tasks have a rationale — so you always know *why* something exists, not just what it is.
 - **Letting you search everything.** Can't remember where that authentication fix went? Search "auth" and Logbook finds every project, task, and log entry that mentions it.
 - **Giving you weekly reports.** Need to remember what you accomplished last week? One command and you have a full summary grouped by project and day. Export it as markdown to share with your team.
+- **Showing a dashboard.** Pull up the web UI at `/ui` for standups — project cards, timelines, and weekly stats at a glance.
 
 ## Features
 
-- **Projects, goals, tasks** with priorities and dependencies
+- **Projects, goals, tasks** with priorities, dependencies, and motivation/rationale fields
 - **Work log** with timestamps and optional git metadata
 - **Summary endpoints**: today, next actions, blocked tasks, weekly report
 - **Full-text search** across all entities (FTS5 with stemming and prefix matching)
 - **Markdown export** for weekly reports, filterable by project
+- **Web dashboard** at `/ui` — summary cards, today timeline, weekly report with navigation, full-text search, light/dark theme
 - **CLI** (`logbook`) for terminal workflows
 - **MCP server** for native Claude Code integration (18 tools)
 - **REST API** with clean JSON responses for any agent or script
 - **SQLite** — single file, no external dependencies
+- **Cross-platform** — runs on Linux and macOS
 
 ## How it works
 
-Logbook has three parts:
+Logbook has four parts:
 
 1. **A server** that runs on your computer and stores everything in a small database file. Once set up, it starts automatically when your computer boots. You never need to think about it.
 
 2. **A command-line tool** (`logbook`) that lets you interact with it from your terminal. You can log work, check your tasks, see summaries, and search.
 
-3. **A connection to Claude Code** so that Claude can use Logbook directly. When you start a session, Claude can check what's on your plate. When you finish work, Claude can log it. You don't have to tell Claude to do this — it has the tools available and can use them naturally.
+3. **A web dashboard** at `http://localhost:8000/ui/` for visual overviews. Three tabs — Summary (project cards you can click to expand), Today (timeline), and Weekly (stats + project-grouped entries with week navigation). Includes full-text search and a light/dark theme toggle.
+
+4. **A connection to Claude Code** so that Claude can use Logbook directly. When you start a session, Claude can check what's on your plate. When you finish work, Claude can log it.
 
 ## Getting started
 
@@ -61,41 +67,17 @@ pip install .
 
 ### Start the server
 
-**On Linux (Fedora, Ubuntu, etc.):**
+The easiest way — works on both Linux and macOS:
 
 ```bash
-mkdir -p ~/.config/systemd/user
-
-cat > ~/.config/systemd/user/logbook.service << 'EOF'
-[Unit]
-Description=Logbook - agentic work journal
-After=network.target
-
-[Service]
-Type=simple
-WorkingDirectory=%h/projects/logbook
-Environment=LOGBOOK_DB_PATH=%h/projects/logbook/logbook.db
-ExecStartPre=alembic upgrade head
-ExecStart=uvicorn logbook.main:app --host 0.0.0.0 --port 8000
-Restart=on-failure
-
-[Install]
-WantedBy=default.target
-EOF
-
-systemctl --user daemon-reload
-systemctl --user enable --now logbook
-loginctl enable-linger $USER
-```
-
-**On Mac:**
-
-```bash
+# Run database migrations
 LOGBOOK_DB_PATH=~/projects/logbook/logbook.db alembic upgrade head
-LOGBOOK_DB_PATH=~/projects/logbook/logbook.db uvicorn logbook.main:app &
+
+# Install and start as a system service (systemd on Linux, launchd on macOS)
+logbook install-service
 ```
 
-(For a permanent Mac setup, you can create a launchd plist — ask Claude Code to help with that.)
+This creates the appropriate service file for your platform and starts the server. It will restart automatically on boot.
 
 **With Docker/Podman:**
 
@@ -111,7 +93,7 @@ curl http://localhost:8000/health
 
 You should see: `{"status":"ok"}`
 
-The API is available at `http://localhost:8000`. OpenAPI docs at `/docs`.
+The API is available at `http://localhost:8000`. OpenAPI docs at `/docs`. Web dashboard at `/ui`.
 
 ### Connect Claude Code
 
@@ -145,7 +127,7 @@ logbook log "fixed deployment bug" --project <ID> --commit abc123
 
 # Tasks
 logbook tasks                          # active tasks
-logbook task create <PROJECT> "title" --priority high
+logbook task create <PROJECT> "title" --priority high --rationale "why this matters"
 logbook task done <ID>
 
 # Planning
@@ -166,18 +148,32 @@ logbook export -o report.md            # save to file
 logbook export -p <PROJECT> -o standup.md  # single project
 
 # Projects & goals
-logbook project create "my-project"
-logbook goal create <PROJECT> "Ship v1" --target 2026-04-15
+logbook project create "my-project" --motivation "why this project exists"
+logbook goal create <PROJECT> "Ship v1" --target 2026-04-15 --motivation "what success looks like"
+
+# Service management
+logbook install-service                # install as system service (Linux/macOS)
+logbook restart                        # reinstall package and restart service
 
 # All commands support --json for machine-readable output
 logbook summary --json
 ```
 
+### Web dashboard
+
+Open `http://localhost:8000/ui/` in your browser. Useful for standups or quick status checks.
+
+- **Summary tab** — Project cards with task count pills. Click a card to expand and see its tasks (with priority pills and rationale) and recent work log timeline.
+- **Today tab** — Timeline of today's logged work and completed tasks grouped by project.
+- **Weekly tab** — Stats bar (entries, tasks completed/created, goals), work grouped by project with motivation shown, completed tasks. Navigate between weeks with prev/next buttons.
+- **Search** — Type in the search box to search across all projects, goals, tasks, and work log entries. Results are grouped by type with highlighted matches.
+- **Theme** — Light/dark mode toggle in the header. Inherits your system preference by default.
+
 ### How information is organized
 
-- **Projects** are the top level. You might have one for each repo, initiative, or area of work.
-- **Goals** are milestones within a project — things like "Ship v1" or "Migrate to new database."
-- **Tasks** are concrete work items. They have priorities (low, medium, high, critical) and can depend on each other (Task B can't start until Task A is done).
+- **Projects** are the top level. You might have one for each repo, initiative, or area of work. Each has a motivation field for why it exists.
+- **Goals** are milestones within a project — things like "Ship v1" or "Migrate to new database." Each has a motivation field for what success looks like.
+- **Tasks** are concrete work items. They have priorities (low, medium, high, critical), a rationale field for why they're needed, and can depend on each other (Task B can't start until Task A is done).
 - **Log entries** are timestamped records of work done. They can be linked to a project and task, or standalone.
 
 Everything is searchable.
@@ -222,6 +218,7 @@ All responses use a consistent envelope:
 | Summary | `GET /summary`, `/summary/today`, `/summary/next`, `/summary/blocked`, `/summary/weekly` |
 | Export | `GET /summary/export/weekly` |
 | Search | `GET /search?q=keyword` |
+| Web UI | `GET /ui/` |
 
 ### Task filtering
 
@@ -234,11 +231,10 @@ When new features are added:
 ```bash
 cd ~/projects/logbook
 git pull
-pip install .
-systemctl --user restart logbook    # Linux
+logbook restart
 ```
 
-Database changes are applied automatically on restart.
+Database migrations are applied automatically via the service configuration.
 
 ## Stack
 
@@ -246,3 +242,4 @@ Database changes are applied automatically on restart.
 - Alembic for migrations
 - Typer + Rich for CLI
 - MCP SDK for agent integration
+- Vanilla HTML/CSS/JS for web dashboard (no build step)
