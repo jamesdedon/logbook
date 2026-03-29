@@ -7,15 +7,28 @@ from logbook.config import settings
 from logbook.services.summary import get_weekly_report
 
 
+def _to_local(iso_str: str) -> datetime:
+    """Convert an ISO-8601 UTC timestamp to a local datetime."""
+    dt = datetime.fromisoformat(iso_str)
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone(settings.tz)
+
+
 def _utc_to_local_time(iso_str: str) -> str:
     """Convert an ISO-8601 UTC timestamp to local HH:MM."""
     try:
-        dt = datetime.fromisoformat(iso_str)
-        if dt.tzinfo is None:
-            dt = dt.replace(tzinfo=timezone.utc)
-        return dt.astimezone(settings.tz).strftime("%H:%M")
+        return _to_local(iso_str).strftime("%H:%M")
     except (ValueError, TypeError):
         return iso_str[11:16] if len(iso_str) > 16 else ""
+
+
+def _utc_to_local_date(iso_str: str) -> str:
+    """Convert an ISO-8601 UTC timestamp to local YYYY-MM-DD."""
+    try:
+        return _to_local(iso_str).strftime("%Y-%m-%d")
+    except (ValueError, TypeError):
+        return iso_str[:10]
 
 
 def _render_weekly_markdown(data: dict) -> str:
@@ -42,7 +55,7 @@ def _render_weekly_markdown(data: dict) -> str:
             lines.append(f"### {project_name}")
             lines.append("")
             for entry in entries:
-                day = entry.created_at[:10]
+                day = _utc_to_local_date(entry.created_at)
                 time = _utc_to_local_time(entry.created_at)
                 meta = json.loads(entry.metadata_json) if entry.metadata_json else {}
                 commit_note = ""
@@ -61,11 +74,16 @@ def _render_weekly_markdown(data: dict) -> str:
                 lines.append(f"- **{day}** {time} — {entry.description}{commit_note}")
             lines.append("")
 
-    # By day
-    if data["days"]:
+    # By day (regroup using local dates)
+    all_entries = [e for entries in data["days"].values() for e in entries]
+    if all_entries:
+        local_days: dict[str, list] = {}
+        for entry in all_entries:
+            local_day = _utc_to_local_date(entry.created_at)
+            local_days.setdefault(local_day, []).append(entry)
         lines.append("## Daily Breakdown")
         lines.append("")
-        for day, entries in sorted(data["days"].items()):
+        for day, entries in sorted(local_days.items()):
             weekday = datetime.fromisoformat(day).strftime("%A")
             lines.append(f"### {weekday}, {day}")
             lines.append("")

@@ -230,10 +230,16 @@ async def get_weekly_report(db: AsyncSession, weeks_back: int = 0, project_id: s
     goals_result = await db.execute(goals_stmt)
     goals_completed = list(goals_result.scalars().all())
 
-    # Group log entries by day
+    # Group log entries by day (using local timezone)
     days: dict[str, list] = {}
     for entry in log_entries:
-        day = entry.created_at[:10]
+        try:
+            dt = datetime.fromisoformat(entry.created_at)
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=timezone.utc)
+            day = dt.astimezone(settings.tz).strftime("%Y-%m-%d")
+        except (ValueError, TypeError):
+            day = entry.created_at[:10]
         days.setdefault(day, []).append(entry)
 
     # Group log entries by project
