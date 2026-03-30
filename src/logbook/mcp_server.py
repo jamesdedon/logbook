@@ -225,6 +225,34 @@ def logbook_log(
 
 
 @mcp.tool()
+def logbook_log_update(
+    entry_id: str,
+    description: str | None = None,
+    project_id: str | None = None,
+    task_id: str | None = None,
+) -> str:
+    """Update an existing work log entry.
+
+    Args:
+        entry_id: The ID of the log entry to update
+        description: New description text
+        project_id: New project ID to link to
+        task_id: New task ID to link to
+    """
+    body: dict = {}
+    if description is not None:
+        body["description"] = description
+    if project_id is not None:
+        body["project_id"] = project_id
+    if task_id is not None:
+        body["task_id"] = task_id
+    if not body:
+        return "Nothing to update — provide at least one field."
+    data = _patch(f"/log/{entry_id}", body)["data"]
+    return f"Updated log entry {data['id']}: {data['description']}"
+
+
+@mcp.tool()
 def logbook_log_list(
     project_id: str | None = None,
     task_id: str | None = None,

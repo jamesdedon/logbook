@@ -312,10 +312,11 @@ function renderToday(data) {
     html += `<div class="section"><div class="section-title">Work logged today</div>`;
     for (const e of data.log_entries) {
       const ci = commitInfo(e.metadata);
+      const proj = e.project_name ? `<span class="item-meta" style="font-weight:600;color:var(--accent)">${esc(e.project_name)}</span>` : "";
       html += `
         <div class="timeline-entry">
           <div class="timeline-time">${esc(time(e.created_at))}</div>
-          <div class="timeline-desc">${esc(e.description)}${ci ? " " + ci : ""}</div>
+          <div class="timeline-desc">${esc(e.description)}${ci ? " " + ci : ""} ${proj}</div>
         </div>`;
     }
     html += `</div>`;

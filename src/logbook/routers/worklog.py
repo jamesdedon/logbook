@@ -61,7 +61,7 @@ async def get_entry(entry_id: str, db: AsyncSession = Depends(get_db)):
 
 @router.patch("/{entry_id}", response_model=ItemResponse)
 async def update_entry(entry_id: str, body: WorkLogUpdate, db: AsyncSession = Depends(get_db)):
-    entry = await svc.update_entry(db, entry_id, **body.model_dump(exclude_none=True))
+    entry = await svc.update_entry(db, entry_id, **body.model_dump(exclude_unset=True))
     if not entry:
         raise HTTPException(status_code=404, detail="Entry not found")
     tags = await project_svc.get_tags(db, "work_log_entry", entry.id)

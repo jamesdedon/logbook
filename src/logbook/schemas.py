@@ -182,12 +182,15 @@ class WorkLogCreate(BaseModel):
 
 class WorkLogUpdate(BaseModel):
     description: str | None = None
+    project_id: str | None = None
+    task_id: str | None = None
     metadata: dict[str, Any] | None = None
 
 
 class WorkLogOut(BaseModel):
     id: str
     project_id: str | None
+    project_name: str = ""
     task_id: str | None
     description: str
     metadata: dict[str, Any] = {}

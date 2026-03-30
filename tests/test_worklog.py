@@ -45,6 +45,16 @@ async def test_update_log_entry(client: AsyncClient):
 
 
 @pytest.mark.asyncio
+async def test_update_log_entry_project(client: AsyncClient, project_id: str):
+    r = await client.post("/log", json={"description": "Unlinked entry"})
+    eid = r.json()["data"]["id"]
+    assert r.json()["data"]["project_id"] is None
+    resp = await client.patch(f"/log/{eid}", json={"project_id": project_id})
+    assert resp.status_code == 200
+    assert resp.json()["data"]["project_id"] == project_id
+
+
+@pytest.mark.asyncio
 async def test_delete_log_entry(client: AsyncClient):
     r = await client.post("/log", json={"description": "Gone"})
     eid = r.json()["data"]["id"]

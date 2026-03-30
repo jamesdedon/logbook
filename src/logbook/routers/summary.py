@@ -74,18 +74,21 @@ async def get_today(db: AsyncSession = Depends(get_db)):
     data = await svc.get_today(db)
     now = datetime.now(timezone.utc).isoformat()
 
-    # Resolve project names for completed tasks
+    # Resolve project names for log entries and completed tasks
     pname_cache: dict[str, str] = {}
-    for t in data["tasks_completed"]:
-        if t.project_id and t.project_id not in pname_cache:
-            p = await db.get(Project, t.project_id)
-            pname_cache[t.project_id] = p.name if p else "Unknown"
+    for item in list(data["log_entries"]) + list(data["tasks_completed"]):
+        pid = item.project_id
+        if pid and pid not in pname_cache:
+            p = await db.get(Project, pid)
+            pname_cache[pid] = p.name if p else "Unknown"
 
     return ItemResponse(data=TodayOut(
         generated_at=now,
         log_entries=[
             WorkLogOut(
-                id=e.id, project_id=e.project_id, task_id=e.task_id,
+                id=e.id, project_id=e.project_id,
+                project_name=pname_cache.get(e.project_id, "") if e.project_id else "",
+                task_id=e.task_id,
                 description=e.description,
                 metadata=json.loads(e.metadata_json) if e.metadata_json else {},
                 created_at=_to_local(e.created_at),

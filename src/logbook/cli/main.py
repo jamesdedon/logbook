@@ -392,6 +392,36 @@ def log_entry(
         console.print(f"[green]Logged:[/green] {data['description']}")
 
 
+@app.command("log-update")
+def log_update(
+    entry_id: str = typer.Argument(..., help="Log entry ID"),
+    description: str = typer.Option(None, "--description", "-d", help="New description"),
+    project: str = typer.Option(None, "--project", help="New project ID"),
+    task: str = typer.Option(None, "--task", help="New task ID"),
+    json_out: bool = typer.Option(False, "--json"),
+):
+    body: dict = {}
+    if description is not None:
+        body["description"] = description
+    if project is not None:
+        body["project_id"] = project
+    if task is not None:
+        body["task_id"] = task
+    if not body:
+        console.print("[red]Nothing to update — provide at least one option.[/red]")
+        raise typer.Exit(1)
+
+    with _client() as c:
+        resp = c.patch(f"/log/{entry_id}", json=body)
+        _handle_error(resp)
+        data = resp.json()["data"]
+
+    if json_out:
+        console.print_json(json.dumps(data))
+    else:
+        console.print(f"[green]Updated:[/green] {data['description']}")
+
+
 # --- Summary commands ---
 
 @app.command("summary")

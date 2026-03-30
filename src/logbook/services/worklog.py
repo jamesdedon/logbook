@@ -76,6 +76,10 @@ async def update_entry(db: AsyncSession, entry_id: str, **kwargs) -> WorkLogEntr
         return None
     if "description" in kwargs and kwargs["description"] is not None:
         entry.description = kwargs["description"]
+    if "project_id" in kwargs:
+        entry.project_id = kwargs["project_id"]
+    if "task_id" in kwargs:
+        entry.task_id = kwargs["task_id"]
     if "metadata" in kwargs and kwargs["metadata"] is not None:
         entry.metadata_json = json.dumps(kwargs["metadata"])
     await db.commit()
