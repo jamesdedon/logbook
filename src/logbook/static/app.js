@@ -80,17 +80,22 @@ function groupBy(arr, keyFn) {
 
 // --- Task toggle ---
 
+function toggleTaskDetails(row) {
+  const toggle = row.querySelector(".task-toggle");
+  if (!toggle) return;
+  const details = row.tagName === "DIV" && row.classList.contains("task-row")
+    ? row.nextElementSibling
+    : row.querySelector(".task-details");
+  if (!details || !details.classList.contains("task-details")) return;
+  const collapsed = details.classList.toggle("collapsed");
+  toggle.classList.toggle("expanded", !collapsed);
+}
+
 function wireTaskToggles(container) {
-  for (const toggle of container.querySelectorAll(".task-toggle")) {
-    toggle.addEventListener("click", (e) => {
+  for (const row of container.querySelectorAll(".task-expandable, .item-expandable")) {
+    row.addEventListener("click", (e) => {
       e.stopPropagation();
-      const row = toggle.closest(".task-row, .item");
-      const details = row.tagName === "DIV" && row.classList.contains("task-row")
-        ? row.nextElementSibling
-        : row.querySelector(".task-details");
-      if (!details || !details.classList.contains("task-details")) return;
-      const collapsed = details.classList.toggle("collapsed");
-      toggle.classList.toggle("expanded", !collapsed);
+      toggleTaskDetails(row);
     });
   }
 }
