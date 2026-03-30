@@ -78,6 +78,23 @@ function groupBy(arr, keyFn) {
   return groups;
 }
 
+// --- Task toggle ---
+
+function wireTaskToggles(container) {
+  for (const toggle of container.querySelectorAll(".task-toggle")) {
+    toggle.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const row = toggle.closest(".task-row, .item");
+      const details = row.tagName === "DIV" && row.classList.contains("task-row")
+        ? row.nextElementSibling
+        : row.querySelector(".task-details");
+      if (!details || !details.classList.contains("task-details")) return;
+      const collapsed = details.classList.toggle("collapsed");
+      toggle.classList.toggle("expanded", !collapsed);
+    });
+  }
+}
+
 // --- Renderers ---
 
 async function toggleProjectDetail(card, projectId) {
@@ -120,14 +137,23 @@ async function toggleProjectDetail(card, projectId) {
       html += `<div class="detail-section"><div class="detail-label">Tasks</div>`;
       for (const t of activeTasks) {
         const statusClass = t.status === "in_progress" ? "pill pill-active" : "pill pill-todo";
+        const hasDetails = t.description || t.rationale;
         html += `
-          <div class="task-row">
+          <div class="task-row${hasDetails ? " task-expandable" : ""}">
             <span class="pill pill-priority-${t.priority}">${esc(t.priority)}</span>
             <span class="task-title">${esc(t.title)}</span>
             <span class="${statusClass}">${esc(t.status.replace("_", " "))}</span>
+            ${hasDetails ? '<span class="task-toggle">&#9654;</span>' : ""}
           </div>`;
-        if (t.rationale) {
-          html += `<div class="task-rationale">${esc(t.rationale)}</div>`;
+        if (hasDetails) {
+          html += `<div class="task-details collapsed">`;
+          if (t.description) {
+            html += `<div class="task-detail-field"><span class="task-detail-label">Description</span> ${esc(t.description)}</div>`;
+          }
+          if (t.rationale) {
+            html += `<div class="task-detail-field"><span class="task-detail-label">Rationale</span> ${esc(t.rationale)}</div>`;
+          }
+          html += `</div>`;
         }
       }
       html += `</div>`;
@@ -159,6 +185,7 @@ async function toggleProjectDetail(card, projectId) {
     }
 
     detail.innerHTML = html;
+    wireTaskToggles(detail);
   } catch (err) {
     detail.innerHTML = `<p class="error">Failed to load: ${esc(err.message)}</p>`;
   }
@@ -204,14 +231,19 @@ function renderSummary(data, archivedProjects) {
   if (data.next_actions?.length) {
     html += `<div class="section"><div class="section-title">Next up</div>`;
     for (const n of data.next_actions) {
+      const hasDetails = n.description || n.rationale;
       html += `
-        <div class="item">
+        <div class="item${hasDetails ? " item-expandable" : ""}">
           <div class="item-title">
             <span class="${priorityClass(n.priority)}">${esc(n.priority)}</span>
             ${esc(n.title)}
             <span class="item-meta">${esc(n.project_name)}</span>
+            ${hasDetails ? '<span class="task-toggle">&#9654;</span>' : ""}
           </div>
-          ${n.rationale ? `<div class="item-rationale">${esc(n.rationale)}</div>` : ""}
+          ${hasDetails ? `<div class="task-details collapsed">
+            ${n.description ? `<div class="task-detail-field"><span class="task-detail-label">Description</span> ${esc(n.description)}</div>` : ""}
+            ${n.rationale ? `<div class="task-detail-field"><span class="task-detail-label">Rationale</span> ${esc(n.rationale)}</div>` : ""}
+          </div>` : ""}
         </div>`;
     }
     html += `</div>`;
@@ -222,10 +254,18 @@ function renderSummary(data, archivedProjects) {
     html += `<div class="section"><div class="section-title">Blocked</div>`;
     for (const bt of data.blocked_tasks) {
       const blockers = bt.blocked_by.map((b) => esc(b.title)).join(", ");
+      const hasDetails = bt.description || bt.rationale;
       html += `
-        <div class="item">
-          <div class="item-title">${esc(bt.title)}</div>
+        <div class="item${hasDetails ? " item-expandable" : ""}">
+          <div class="item-title">
+            ${esc(bt.title)}
+            ${hasDetails ? '<span class="task-toggle">&#9654;</span>' : ""}
+          </div>
           <div class="item-meta">waiting on: ${blockers}</div>
+          ${hasDetails ? `<div class="task-details collapsed">
+            ${bt.description ? `<div class="task-detail-field"><span class="task-detail-label">Description</span> ${esc(bt.description)}</div>` : ""}
+            ${bt.rationale ? `<div class="task-detail-field"><span class="task-detail-label">Rationale</span> ${esc(bt.rationale)}</div>` : ""}
+          </div>` : ""}
         </div>`;
     }
     html += `</div>`;
@@ -245,6 +285,9 @@ function renderSummary(data, archivedProjects) {
       toggleProjectDetail(card, card.dataset.projectId);
     });
   }
+
+  // Wire up task detail toggles
+  wireTaskToggles(content);
 
   // Wire up archived toggle
   const toggle = $("#archived-toggle");

@@ -170,6 +170,7 @@ async def get_next_actions(db: AsyncSession, limit: int = 10) -> list[dict]:
         {
             "id": t.id,
             "title": t.title,
+            "description": t.description or "",
             "rationale": t.rationale or "",
             "priority": t.priority,
             "project_id": t.project_id,
@@ -317,6 +318,8 @@ async def get_blocked_tasks(db: AsyncSession) -> list[dict]:
         {
             "id": task.id,
             "title": task.title,
+            "description": task.description or "",
+            "rationale": task.rationale or "",
             "project_id": task.project_id,
             "blocked_by": [
                 {"id": b.id, "title": b.title, "status": b.status}

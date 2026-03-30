@@ -209,6 +209,8 @@ class ProjectSummary(BaseModel):
 class BlockedTaskOut(BaseModel):
     id: str
     title: str
+    description: str = ""
+    rationale: str = ""
     project_id: str
     blocked_by: list[TaskDepRef]
 
@@ -216,6 +218,7 @@ class BlockedTaskOut(BaseModel):
 class NextAction(BaseModel):
     id: str
     title: str
+    description: str = ""
     rationale: str = ""
     priority: str
     project_id: str

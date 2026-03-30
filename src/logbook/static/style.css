@@ -264,12 +264,6 @@ main {
   color: var(--text-dim);
 }
 
-.item-rationale {
-  font-size: 13px;
-  color: var(--text-dim);
-  font-style: italic;
-  margin-top: 2px;
-}
 
 /* --- Priority --- */
 
@@ -479,12 +473,61 @@ main {
   color: var(--green);
 }
 
-.task-rationale {
+/* --- Collapsible task details --- */
+
+.task-toggle {
+  font-size: 10px;
+  color: var(--text-dim);
+  cursor: pointer;
+  transition: transform 0.15s;
+  display: inline-block;
+  user-select: none;
+  margin-left: 4px;
+}
+
+.task-toggle.expanded {
+  transform: rotate(90deg);
+}
+
+.task-expandable,
+.item-expandable {
+  cursor: pointer;
+}
+
+.task-details {
   font-size: 13px;
   color: var(--text-dim);
-  padding: 0 0 6px 0;
-  margin-left: 60px;
+  padding: 4px 0 8px 28px;
   border-bottom: 1px solid var(--border);
+  overflow: hidden;
+  transition: max-height 0.2s ease, opacity 0.2s ease;
+  max-height: 300px;
+  opacity: 1;
+}
+
+.task-details.collapsed {
+  max-height: 0;
+  opacity: 0;
+  padding-top: 0;
+  padding-bottom: 0;
+}
+
+.task-detail-field {
+  margin-bottom: 4px;
+  line-height: 1.5;
+}
+
+.task-detail-field:last-child {
+  margin-bottom: 0;
+}
+
+.task-detail-label {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  color: var(--accent);
+  margin-right: 6px;
 }
 
 .pill-priority-critical { background: var(--red-bg); color: var(--red); }
