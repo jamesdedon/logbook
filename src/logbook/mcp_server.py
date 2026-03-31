@@ -61,6 +61,13 @@ def _patch(path: str, body: dict) -> dict:
         return resp.json()
 
 
+def _delete(path: str) -> dict:
+    with httpx.Client(base_url=BASE_URL, timeout=10) as c:
+        resp = c.delete(path)
+        resp.raise_for_status()
+        return resp.json()
+
+
 # --- Summary / Planning tools ---
 
 @mcp.tool()
@@ -285,6 +292,17 @@ def logbook_log_list(
         project_note = f" [project: {e['project_id'][:12]}]" if e.get("project_id") else ""
         lines.append(_wrap(f"{time} — {e['description']}{project_note}"))
     return "\n".join(lines)
+
+
+@mcp.tool()
+def logbook_log_delete(entry_id: str) -> str:
+    """Delete a work log entry.
+
+    Args:
+        entry_id: The ID of the log entry to delete
+    """
+    _delete(f"/log/{entry_id}")
+    return f"Deleted log entry {entry_id}."
 
 
 # --- Project tools ---
