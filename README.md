@@ -53,7 +53,7 @@ Logbook has four parts:
 
 ### Prerequisites
 
-- Python 3.12 or newer
+- Python 3.11 or newer
 - Claude Code installed
 - Git (to clone the project)
 
@@ -118,6 +118,8 @@ You don't need to memorize commands. Just talk to Claude naturally:
 # Log work (most common command)
 logbook log "shipped the auth refactor"
 logbook log "fixed deployment bug" --project <ID> --commit abc123
+logbook log-update <ID> -d "corrected description"
+logbook log-delete <ID>
 
 # Tasks
 logbook tasks                          # active tasks
@@ -161,8 +163,16 @@ logbook summary --json
 Open `http://localhost:8000/ui/` in your browser. Useful for standups or quick status checks.
 
 - **Summary tab** — Project cards with task count pills. Click a card to expand and see its tasks (with priority pills and rationale) and recent work log timeline.
+
+  ![Summary tab](summary.jpg)
+
 - **Today tab** — Timeline of today's logged work and completed tasks grouped by project.
+
+  ![Today tab](today.jpg)
+
 - **Weekly tab** — Stats bar (entries, tasks completed/created, goals), work grouped by project with motivation shown, completed tasks. Navigate between weeks with prev/next buttons.
+
+  ![Weekly tab](weekly.jpg)
 - **Search** — Type in the search box to search across all projects, goals, tasks, and work log entries. Results are grouped by type with highlighted matches.
 - **Theme** — Light/dark mode toggle in the header. Inherits your system preference by default.
 
@@ -235,7 +245,7 @@ Database migrations are applied automatically via the service configuration.
 
 ## Stack
 
-- Python 3.12+, FastAPI, SQLAlchemy (async), SQLite via aiosqlite
+- Python 3.11+, FastAPI, SQLAlchemy (async), SQLite via aiosqlite
 - Alembic for migrations
 - Typer + Rich for CLI
 - MCP SDK for agent integration
