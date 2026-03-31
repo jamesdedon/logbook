@@ -422,6 +422,17 @@ def log_update(
         console.print(f"[green]Updated:[/green] {data['description']}")
 
 
+@app.command("log-delete")
+def log_delete(
+    entry_id: str = typer.Argument(..., help="Log entry ID"),
+):
+    with _client() as c:
+        resp = c.delete(f"/log/{entry_id}")
+        _handle_error(resp)
+
+    console.print(f"[green]Deleted log entry {entry_id}.[/green]")
+
+
 # --- Summary commands ---
 
 @app.command("summary")

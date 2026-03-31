@@ -462,6 +462,8 @@ function renderHelp() {
   <h3>Logging &amp; viewing</h3>
   <table>
     <tr><td><code>logbook log "description"</code></td><td>Log work (supports --project, --task, --commit, --repo, --branch)</td></tr>
+    <tr><td><code>logbook log-update &lt;ID&gt;</code></td><td>Update a log entry (supports --description, --project, --task)</td></tr>
+    <tr><td><code>logbook log-delete &lt;ID&gt;</code></td><td>Delete a log entry</td></tr>
     <tr><td><code>logbook tasks</code></td><td>List active tasks (supports --project, --status, --priority, --blocked)</td></tr>
     <tr><td><code>logbook summary</code></td><td>Full overview of all projects</td></tr>
     <tr><td><code>logbook today</code></td><td>Today's activity</td></tr>
