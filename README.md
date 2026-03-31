@@ -60,8 +60,8 @@ Logbook has four parts:
 ### Installation
 
 ```bash
-git clone git@github.com:jamesdedon/logbook.git ~/projects/logbook
-cd ~/projects/logbook
+git clone git@github.com:jamesdedon/logbook.git ~/logbook
+cd ~/logbook
 pip install .
 ```
 
@@ -71,7 +71,7 @@ The easiest way — works on both Linux and macOS:
 
 ```bash
 # Run database migrations
-LOGBOOK_DB_PATH=~/projects/logbook/logbook.db alembic upgrade head
+LOGBOOK_DB_PATH=~/logbook/logbook.db alembic upgrade head
 
 # Install and start as a system service (systemd on Linux, launchd on macOS)
 logbook install-service
@@ -236,7 +236,7 @@ All responses use a consistent envelope:
 When new features are added:
 
 ```bash
-cd ~/projects/logbook
+cd ~/logbook
 git pull
 logbook restart
 ```
