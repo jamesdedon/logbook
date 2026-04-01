@@ -205,6 +205,31 @@ main {
   border-radius: var(--radius);
   padding: 16px;
   box-shadow: var(--shadow);
+  position: relative;
+}
+
+.card-archive-btn {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  font-size: 12px;
+  padding: 2px 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--text-dim);
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+
+.card:hover .card-archive-btn {
+  opacity: 1;
+}
+
+.card-archive-btn:hover {
+  border-color: var(--accent);
+  color: var(--accent);
 }
 
 .card h3 {
@@ -480,6 +505,12 @@ main {
 
 .task-done .check {
   color: var(--green);
+}
+
+.task-completed-date {
+  font-size: 0.82em;
+  color: var(--text-dim);
+  margin-left: 0.5em;
 }
 
 /* --- Collapsible task details --- */

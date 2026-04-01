@@ -1,3 +1,5 @@
+import re
+
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -26,8 +28,13 @@ async def search(
     if any(op in query for op in fts_operators):
         fts_query = query
     else:
-        # Auto prefix-match each token
-        fts_query = " ".join(f"{t}*" for t in tokens)
+        # Strip leading/trailing punctuation that FTS5 can't handle,
+        # then auto prefix-match each remaining token
+        cleaned = [re.sub(r'^[^\w]+|[^\w]+$', '', t) for t in tokens]
+        cleaned = [t for t in cleaned if t]
+        if not cleaned:
+            return []
+        fts_query = " ".join(f"{t}*" for t in cleaned)
 
     type_filter = ""
     params: dict = {"query": fts_query, "limit": limit}

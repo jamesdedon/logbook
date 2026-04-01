@@ -38,6 +38,16 @@ function date(isoStr) {
   return isoStr.slice(0, 10);
 }
 
+function shortDate(isoStr) {
+  if (!isoStr) return "";
+  try {
+    const d = new Date(isoStr);
+    return d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+  } catch {
+    return isoStr.slice(5, 10);
+  }
+}
+
 function prettyDate(isoStr) {
   if (!isoStr) return "";
   try {
@@ -171,9 +181,10 @@ async function toggleProjectDetail(card, projectId) {
       html += `<div class="detail-section"><div class="detail-label">Completed</div>`;
       for (const t of doneTasks) {
         const hasDetails = t.description || t.rationale || t.notes;
+        const completedDate = t.completed_at ? `<span class="task-completed-date">${esc(shortDate(t.completed_at))}</span>` : "";
         html += `
           <div class="task-row task-done${hasDetails ? " task-expandable" : ""}">
-            <span class="check">&#10003;</span> ${esc(t.title)}
+            <span class="check">&#10003;</span> ${esc(t.title)} ${completedDate}
             ${hasDetails ? '<span class="task-toggle">&#9654;</span>' : ""}
           </div>`;
         if (hasDetails) {
@@ -199,7 +210,7 @@ async function toggleProjectDetail(card, projectId) {
         const ci = commitInfo(e.metadata);
         html += `
           <div class="timeline-entry">
-            <div class="timeline-time">${esc(time(e.created_at))}</div>
+            <div class="timeline-time">${esc(shortDate(e.created_at))} ${esc(time(e.created_at))}</div>
             <div class="timeline-desc">${esc(e.description)}${ci ? " " + ci : ""}</div>
           </div>`;
       }
@@ -238,8 +249,11 @@ function renderSummary(data, archivedProjects) {
     for (const p of allProjects) {
       const ts = p.tasks_summary || {};
       const isArchived = p.status === "archived";
+      const archiveLabel = isArchived ? "Unarchive" : "Archive";
+      const archiveAction = isArchived ? "active" : "archived";
       html += `
         <div class="card card-clickable${isArchived ? " card-archived" : ""}" data-project-id="${esc(p.id)}">
+          <button class="card-archive-btn" data-project-id="${esc(p.id)}" data-action="${archiveAction}" title="${archiveLabel}">${archiveLabel}</button>
           <h3>${esc(p.name)}${isArchived ? ' <span class="pill pill-archived">archived</span>' : ""}</h3>
           ${p.motivation ? `<div class="motivation">${esc(p.motivation)}</div>` : ""}
           <div class="pills">
@@ -306,9 +320,28 @@ function renderSummary(data, archivedProjects) {
   // Wire up card clicks
   for (const card of $$(".card-clickable")) {
     card.addEventListener("click", (e) => {
-      // Don't toggle if clicking inside the detail area
-      if (e.target.closest(".card-detail")) return;
+      // Don't toggle if clicking inside the detail area or archive button
+      if (e.target.closest(".card-detail") || e.target.closest(".card-archive-btn")) return;
       toggleProjectDetail(card, card.dataset.projectId);
+    });
+  }
+
+  // Wire up archive buttons
+  for (const btn of $$(".card-archive-btn")) {
+    btn.addEventListener("click", async (e) => {
+      e.stopPropagation();
+      const pid = btn.dataset.projectId;
+      const newStatus = btn.dataset.action;
+      try {
+        await fetch(`/projects/${pid}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ status: newStatus }),
+        });
+        loadTab("summary");
+      } catch (err) {
+        alert(`Failed to update project: ${err.message}`);
+      }
     });
   }
 
