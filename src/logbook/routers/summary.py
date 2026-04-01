@@ -26,6 +26,7 @@ from logbook.schemas import (
 from logbook.models import Project
 from logbook.services import summary as svc
 from logbook.services.export import export_weekly_markdown
+from logbook.services.projects import resolve_project_id
 
 router = APIRouter(prefix="/summary", tags=["summary"])
 
@@ -122,6 +123,8 @@ async def get_next(db: AsyncSession = Depends(get_db)):
 
 @router.get("/weekly", response_model=ItemResponse)
 async def get_weekly(weeks_back: int = 0, project_id: str | None = None, db: AsyncSession = Depends(get_db)):
+    if project_id:
+        project_id = await resolve_project_id(db, project_id)
     data = await svc.get_weekly_report(db, weeks_back=weeks_back, project_id=project_id)
     now = datetime.now(timezone.utc).isoformat()
 
@@ -175,6 +178,8 @@ async def get_weekly(weeks_back: int = 0, project_id: str | None = None, db: Asy
 
 @router.get("/export/weekly", response_class=PlainTextResponse)
 async def export_weekly(weeks_back: int = 0, project_id: str | None = None, db: AsyncSession = Depends(get_db)):
+    if project_id:
+        project_id = await resolve_project_id(db, project_id)
     markdown = await export_weekly_markdown(db, weeks_back=weeks_back, project_id=project_id)
     return PlainTextResponse(content=markdown, media_type="text/markdown")
 

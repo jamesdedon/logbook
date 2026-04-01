@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from logbook.database import get_db
 from logbook.schemas import ItemResponse, ListResponse, Meta, WorkLogCreate, WorkLogOut, WorkLogUpdate
 from logbook.services import projects as project_svc
+from logbook.services.projects import resolve_project_id
 from logbook.services import worklog as svc
 
 router = APIRouter(prefix="/log", tags=["worklog"])
@@ -41,6 +42,8 @@ async def list_entries(
     offset: int = 0,
     db: AsyncSession = Depends(get_db),
 ):
+    if project_id:
+        project_id = await resolve_project_id(db, project_id)
     entries, total = await svc.list_entries(
         db, project_id=project_id, task_id=task_id, since=since,
         until=until, q=q, limit=limit, offset=offset,

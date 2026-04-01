@@ -18,6 +18,7 @@ from logbook.schemas import (
 )
 from logbook.models import Project
 from logbook.services import projects as project_svc
+from logbook.services.projects import resolve_project_id
 from logbook.services import tasks as svc
 
 router = APIRouter(tags=["tasks"])
@@ -53,6 +54,7 @@ async def _task_to_out(db: AsyncSession, task_id: str) -> TaskOut:
 
 @router.post("/projects/{project_id}/tasks", response_model=ItemResponse)
 async def create_task(project_id: str, body: TaskCreate, db: AsyncSession = Depends(get_db)):
+    project_id = await resolve_project_id(db, project_id)
     task = await svc.create_task(
         db, project_id=project_id, title=body.title, description=body.description,
         rationale=body.rationale, notes=body.notes, priority=body.priority, goal_id=body.goal_id,
@@ -76,6 +78,8 @@ async def list_tasks(
     offset: int = 0,
     db: AsyncSession = Depends(get_db),
 ):
+    if project_id:
+        project_id = await resolve_project_id(db, project_id)
     tasks, total = await svc.list_tasks(
         db, project_id=project_id, goal_id=goal_id, status=status,
         priority=priority, blocked=blocked, tag=tag, q=q, sort=sort,
@@ -113,6 +117,7 @@ async def list_project_tasks(
     offset: int = 0,
     db: AsyncSession = Depends(get_db),
 ):
+    project_id = await resolve_project_id(db, project_id)
     tasks, total = await svc.list_tasks(
         db, project_id=project_id, status=status, priority=priority,
         limit=limit, offset=offset,

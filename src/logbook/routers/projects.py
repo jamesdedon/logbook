@@ -4,6 +4,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from logbook.database import get_db
 from logbook.schemas import ItemResponse, ListResponse, Meta, ProjectCounts, ProjectCreate, ProjectOut, ProjectUpdate
 from logbook.services import projects as svc
+from logbook.services.projects import resolve_project_id
 
 router = APIRouter(prefix="/projects", tags=["projects"])
 
@@ -36,6 +37,7 @@ async def list_projects(status: str | None = None, db: AsyncSession = Depends(ge
 
 @router.get("/{project_id}", response_model=ItemResponse)
 async def get_project(project_id: str, db: AsyncSession = Depends(get_db)):
+    project_id = await resolve_project_id(db, project_id)
     project = await svc.get_project(db, project_id)
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
@@ -51,6 +53,7 @@ async def get_project(project_id: str, db: AsyncSession = Depends(get_db)):
 
 @router.patch("/{project_id}", response_model=ItemResponse)
 async def update_project(project_id: str, body: ProjectUpdate, db: AsyncSession = Depends(get_db)):
+    project_id = await resolve_project_id(db, project_id)
     project = await svc.update_project(db, project_id, **body.model_dump(exclude_none=True))
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
@@ -64,6 +67,7 @@ async def update_project(project_id: str, body: ProjectUpdate, db: AsyncSession 
 
 @router.delete("/{project_id}")
 async def delete_project(project_id: str, db: AsyncSession = Depends(get_db)):
+    project_id = await resolve_project_id(db, project_id)
     deleted = await svc.delete_project(db, project_id)
     if not deleted:
         raise HTTPException(status_code=404, detail="Project not found")

@@ -4,12 +4,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from logbook.database import get_db
 from logbook.schemas import GoalCreate, GoalOut, GoalUpdate, ItemResponse, ListResponse, Meta
 from logbook.services import goals as svc
+from logbook.services.projects import resolve_project_id
 
 router = APIRouter(tags=["goals"])
 
 
 @router.post("/projects/{project_id}/goals", response_model=ItemResponse)
 async def create_goal(project_id: str, body: GoalCreate, db: AsyncSession = Depends(get_db)):
+    project_id = await resolve_project_id(db, project_id)
     goal = await svc.create_goal(
         db, project_id=project_id, title=body.title,
         description=body.description, motivation=body.motivation,
@@ -25,6 +27,7 @@ async def create_goal(project_id: str, body: GoalCreate, db: AsyncSession = Depe
 
 @router.get("/projects/{project_id}/goals", response_model=ListResponse)
 async def list_goals(project_id: str, status: str | None = None, db: AsyncSession = Depends(get_db)):
+    project_id = await resolve_project_id(db, project_id)
     goals = await svc.list_goals(db, project_id=project_id, status=status)
     items = [
         GoalOut(

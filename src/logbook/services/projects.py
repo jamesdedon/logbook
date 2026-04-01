@@ -31,6 +31,29 @@ async def get_project(db: AsyncSession, project_id: str) -> Project | None:
     return await db.get(Project, project_id)
 
 
+async def resolve_project_id(db: AsyncSession, project_id: str) -> str:
+    """Resolve a project identifier to its actual ID.
+
+    Accepts a ULID (returned as-is if the project exists) or a case-insensitive
+    project name.  Returns the canonical project ID, or the original string
+    unchanged if no match is found.
+    """
+    # 1. Try exact ID lookup first (fast path)
+    project = await db.get(Project, project_id)
+    if project:
+        return project.id
+
+    # 2. Fall back to case-insensitive name match
+    result = await db.execute(
+        select(Project).where(func.lower(Project.name) == project_id.lower())
+    )
+    project = result.scalar_one_or_none()
+    if project:
+        return project.id
+
+    return project_id  # unchanged – let downstream handle the miss
+
+
 async def get_project_counts(db: AsyncSession, project_id: str) -> dict:
     goals_count = await db.scalar(
         select(func.count()).where(Goal.project_id == project_id, Goal.status == "active")
