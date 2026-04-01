@@ -210,7 +210,7 @@ async function toggleProjectDetail(card, projectId) {
         const ci = commitInfo(e.metadata);
         html += `
           <div class="timeline-entry">
-            <div class="timeline-time">${esc(shortDate(e.created_at))} ${esc(time(e.created_at))}</div>
+            <div class="timeline-time"><span class="timeline-date">${esc(shortDate(e.created_at))}</span> ${esc(time(e.created_at))}</div>
             <div class="timeline-desc">${esc(e.description)}${ci ? " " + ci : ""}</div>
           </div>`;
       }

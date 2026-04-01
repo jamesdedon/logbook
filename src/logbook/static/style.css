@@ -391,6 +391,11 @@ main {
   padding-top: 1px;
 }
 
+.timeline-date {
+  font-weight: 700;
+  color: var(--text);
+}
+
 .timeline-desc {
   font-size: 14px;
 }
