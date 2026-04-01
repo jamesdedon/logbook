@@ -203,7 +203,46 @@ It only shows tasks that aren't blocked, so everything it suggests is something 
 
 ### Where is my data?
 
-Everything is stored in a single file called `logbook.db` in your project directory. It's a standard SQLite database. Your data never leaves your computer — there's no cloud service, no account, no sync. If you want to back it up, just copy that file.
+Everything is stored in a single file called `logbook.db` (default: `~/logbook/logbook.db`). It's a standard SQLite database. Your data never leaves your computer — there's no cloud service, no account, no sync.
+
+#### Backing up
+
+Logbook has a built-in backup command that checkpoints the SQLite WAL first, so you get a clean, self-contained copy:
+
+```bash
+# Back up to a specific file
+logbook backup /path/to/backup/logbook.db
+
+# Back up to your configured backup directory (see below)
+logbook backup
+```
+
+To configure a default backup directory so you can run `logbook backup` without arguments:
+
+```bash
+logbook config set backup_path /mnt/nas/logbook   # or any path you like
+```
+
+#### Restoring from a backup
+
+```bash
+# Restore from a specific file
+logbook restore /path/to/backup/logbook.db
+
+# Restore from your configured backup directory
+logbook restore
+```
+
+The restore command stops the service, replaces the database, and restarts the service automatically.
+
+#### Manual backup
+
+Since the database is a single SQLite file, you can also just copy it directly. Make sure to checkpoint the WAL first so nothing is left in the write-ahead log:
+
+```bash
+sqlite3 ~/logbook/logbook.db "PRAGMA wal_checkpoint(TRUNCATE);"
+cp ~/logbook/logbook.db /your/backup/location/logbook.db
+```
 
 ## REST API
 
