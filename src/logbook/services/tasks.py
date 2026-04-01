@@ -13,6 +13,7 @@ async def create_task(
     title: str,
     description: str = "",
     rationale: str = "",
+    notes: str = "",
     priority: str = "medium",
     goal_id: str | None = None,
     tags: list[str] | None = None,
@@ -23,6 +24,7 @@ async def create_task(
         title=title,
         description=description,
         rationale=rationale,
+        notes=notes,
         priority=priority,
         goal_id=goal_id,
     )

@@ -119,6 +119,51 @@ def project_show(
             _indent(f"Goals: {c['goals']}  |  Tasks: {c['tasks_todo']} todo, {c['tasks_in_progress']} active, {c['tasks_done']} done")
 
 
+@project_app.command("update")
+def project_update(
+    id: str = typer.Argument(...),
+    name: str = typer.Option(None, "--name"),
+    desc: str = typer.Option(None, "--desc"),
+    motivation: str = typer.Option(None, "--motivation", "-m"),
+    status: str = typer.Option(None, "--status"),
+    json_out: bool = typer.Option(False, "--json"),
+):
+    body = {}
+    if name is not None:
+        body["name"] = name
+    if desc is not None:
+        body["description"] = desc
+    if motivation is not None:
+        body["motivation"] = motivation
+    if status is not None:
+        body["status"] = status
+    if not body:
+        console.print("[red]Nothing to update — provide at least one option.[/red]")
+        raise typer.Exit(1)
+    with _client() as c:
+        resp = c.patch(f"/projects/{id}", json=body)
+        _handle_error(resp)
+        data = resp.json()["data"]
+
+    if json_out:
+        console.print_json(json.dumps(data))
+    else:
+        console.print(f"[green]Updated project:[/green] {data['name']} ({data['status']})")
+
+
+@project_app.command("delete")
+def project_delete(
+    id: str = typer.Argument(...),
+    yes: bool = typer.Option(False, "--yes", "-y", help="Skip confirmation"),
+):
+    if not yes:
+        typer.confirm(f"Delete project {id}? This cannot be undone", abort=True)
+    with _client() as c:
+        resp = c.delete(f"/projects/{id}")
+        _handle_error(resp)
+    console.print("[red]Deleted.[/red]")
+
+
 @project_app.command("archive")
 def project_archive(id: str = typer.Argument(...)):
     with _client() as c:
@@ -276,12 +321,13 @@ def task_create(
     title: str = typer.Argument(...),
     desc: str = typer.Option("", "--desc"),
     rationale: str = typer.Option("", "--rationale", "-r", help="Why is this task needed?"),
+    notes: str = typer.Option("", "--notes", "-n", help="Additional context or findings"),
     priority: str = typer.Option("medium", "--priority"),
     goal: str = typer.Option(None, "--goal", help="Goal ID"),
     blocked_by: str = typer.Option(None, "--blocked-by", help="Comma-separated blocker task IDs"),
     json_out: bool = typer.Option(False, "--json"),
 ):
-    body = {"title": title, "description": desc, "rationale": rationale, "priority": priority}
+    body = {"title": title, "description": desc, "rationale": rationale, "notes": notes, "priority": priority}
     if goal:
         body["goal_id"] = goal
     if blocked_by:
@@ -317,6 +363,8 @@ def task_show(id: str = typer.Argument(...), json_out: bool = typer.Option(False
             _indent(data['description'])
         if data.get("rationale"):
             _indent(f"[italic]Rationale:[/italic] {data['rationale']}")
+        if data.get("notes"):
+            _indent(f"[italic]Notes:[/italic] {data['notes']}")
         if data.get("blocked_by"):
             _indent("[red]Blocked by:[/red]")
             for b in data["blocked_by"]:

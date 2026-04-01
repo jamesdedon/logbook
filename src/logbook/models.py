@@ -79,6 +79,7 @@ class Task(Base):
     title: Mapped[str] = mapped_column(String, nullable=False)
     description: Mapped[str] = mapped_column(Text, default="")
     rationale: Mapped[str] = mapped_column(Text, default="")
+    notes: Mapped[str] = mapped_column(Text, default="")
     status: Mapped[str] = mapped_column(String, default="todo")
     priority: Mapped[str] = mapped_column(String, default="medium")
     created_at: Mapped[str] = mapped_column(String, default=_now)

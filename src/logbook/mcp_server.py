@@ -358,6 +358,49 @@ def logbook_project_detail(project_id: str) -> str:
 
 
 @mcp.tool()
+def logbook_project_update(
+    project_id: str,
+    name: str | None = None,
+    description: str | None = None,
+    motivation: str | None = None,
+    status: str | None = None,
+) -> str:
+    """Update a project's name, description, motivation, or status.
+
+    Args:
+        project_id: The project ID to update
+        name: New project name
+        description: New project description
+        motivation: New motivation text
+        status: New status (active, archived)
+    """
+    body: dict = {}
+    if name is not None:
+        body["name"] = name
+    if description is not None:
+        body["description"] = description
+    if motivation is not None:
+        body["motivation"] = motivation
+    if status is not None:
+        body["status"] = status
+    if not body:
+        return "Nothing to update — provide at least one field."
+    data = _patch(f"/projects/{project_id}", body)["data"]
+    return f"Updated project: {data['name']} (id: {data['id']}, status: {data['status']})"
+
+
+@mcp.tool()
+def logbook_project_delete(project_id: str) -> str:
+    """Permanently delete a project and all its goals and tasks. This cannot be undone.
+
+    Args:
+        project_id: The project ID to delete
+    """
+    _delete(f"/projects/{project_id}")
+    return f"Deleted project {project_id}."
+
+
+@mcp.tool()
 def logbook_project_archive(project_id: str) -> str:
     """Archive a project. Archived projects are hidden from the default project list and summary.
 
@@ -423,6 +466,7 @@ def logbook_task_create(
     title: str,
     description: str = "",
     rationale: str = "",
+    notes: str = "",
     priority: str = "medium",
     goal_id: str | None = None,
     blocked_by: list[str] | None = None,
@@ -434,11 +478,12 @@ def logbook_task_create(
         title: Task title
         description: Task description
         rationale: Why is this task needed? What triggered it?
+        notes: Additional context, findings, or running commentary on this task
         priority: Priority level (low, medium, high, critical)
         goal_id: Optional goal ID to link this task to
         blocked_by: Optional list of task IDs that block this task
     """
-    body: dict = {"title": title, "description": description, "rationale": rationale, "priority": priority}
+    body: dict = {"title": title, "description": description, "rationale": rationale, "notes": notes, "priority": priority}
     if goal_id:
         body["goal_id"] = goal_id
     if blocked_by:
@@ -456,14 +501,18 @@ def logbook_task_update(
     task_id: str,
     status: str | None = None,
     title: str | None = None,
+    description: str | None = None,
+    notes: str | None = None,
     priority: str | None = None,
 ) -> str:
-    """Update a task's status, title, or priority. Use status='done' to complete a task.
+    """Update a task's status, title, description, notes, or priority. Use status='done' to complete a task.
 
     Args:
         task_id: The task ID to update
         status: New status (todo, in_progress, done, cancelled)
         title: New title
+        description: New description
+        notes: Additional context, findings, or running commentary on this task
         priority: New priority (low, medium, high, critical)
     """
     body = {}
@@ -471,6 +520,10 @@ def logbook_task_update(
         body["status"] = status
     if title:
         body["title"] = title
+    if description:
+        body["description"] = description
+    if notes:
+        body["notes"] = notes
     if priority:
         body["priority"] = priority
 
@@ -492,6 +545,8 @@ def logbook_task_detail(task_id: str) -> str:
         lines.append(_wrap(data['description']))
     if data.get("rationale"):
         lines.append(_wrap(f"Rationale: {data['rationale']}"))
+    if data.get("notes"):
+        lines.append(_wrap(f"Notes: {data['notes']}"))
     if data.get("is_blocked"):
         lines.append("  STATUS: BLOCKED")
     if data.get("blocked_by"):

@@ -103,6 +103,7 @@ class TaskCreate(BaseModel):
     title: str
     description: str = ""
     rationale: str = ""
+    notes: str = ""
     priority: str = "medium"
     goal_id: str | None = None
     tags: list[str] = []
@@ -113,6 +114,7 @@ class TaskUpdate(BaseModel):
     title: str | None = None
     description: str | None = None
     rationale: str | None = None
+    notes: str | None = None
     status: str | None = None
     priority: str | None = None
     goal_id: str | None = None
@@ -138,6 +140,7 @@ class TaskOut(BaseModel):
     title: str
     description: str
     rationale: str = ""
+    notes: str = ""
     status: str
     priority: str
     tags: list[str] = []

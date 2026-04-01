@@ -142,7 +142,7 @@ async function toggleProjectDetail(card, projectId) {
       html += `<div class="detail-section"><div class="detail-label">Tasks</div>`;
       for (const t of activeTasks) {
         const statusClass = t.status === "in_progress" ? "pill pill-active" : "pill pill-todo";
-        const hasDetails = t.description || t.rationale;
+        const hasDetails = t.description || t.rationale || t.notes;
         html += `
           <div class="task-row${hasDetails ? " task-expandable" : ""}">
             <span class="pill pill-priority-${t.priority}">${esc(t.priority)}</span>
@@ -158,6 +158,9 @@ async function toggleProjectDetail(card, projectId) {
           if (t.rationale) {
             html += `<div class="task-detail-field"><span class="task-detail-label">Rationale</span> ${esc(t.rationale)}</div>`;
           }
+          if (t.notes) {
+            html += `<div class="task-detail-field"><span class="task-detail-label">Notes</span> ${esc(t.notes)}</div>`;
+          }
           html += `</div>`;
         }
       }
@@ -167,7 +170,25 @@ async function toggleProjectDetail(card, projectId) {
     if (doneTasks.length) {
       html += `<div class="detail-section"><div class="detail-label">Completed</div>`;
       for (const t of doneTasks) {
-        html += `<div class="task-row task-done"><span class="check">&#10003;</span> ${esc(t.title)}</div>`;
+        const hasDetails = t.description || t.rationale || t.notes;
+        html += `
+          <div class="task-row task-done${hasDetails ? " task-expandable" : ""}">
+            <span class="check">&#10003;</span> ${esc(t.title)}
+            ${hasDetails ? '<span class="task-toggle">&#9654;</span>' : ""}
+          </div>`;
+        if (hasDetails) {
+          html += `<div class="task-details collapsed">`;
+          if (t.description) {
+            html += `<div class="task-detail-field"><span class="task-detail-label">Description</span> ${esc(t.description)}</div>`;
+          }
+          if (t.rationale) {
+            html += `<div class="task-detail-field"><span class="task-detail-label">Rationale</span> ${esc(t.rationale)}</div>`;
+          }
+          if (t.notes) {
+            html += `<div class="task-detail-field"><span class="task-detail-label">Notes</span> ${esc(t.notes)}</div>`;
+          }
+          html += `</div>`;
+        }
       }
       html += `</div>`;
     }
