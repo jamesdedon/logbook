@@ -60,9 +60,10 @@ Logbook has four parts:
 ### Installation
 
 ```bash
-git clone git@github.com:jamesdedon/logbook.git ~/logbook
-cd ~/logbook
-pip install .
+git clone git@github.com:jamesdedon/logbook.git ~/.logbook
+cd ~/.logbook
+uv venv
+uv pip install -e .
 ```
 
 ### Start the server
@@ -71,7 +72,7 @@ The easiest way — works on both Linux and macOS:
 
 ```bash
 # Run database migrations
-LOGBOOK_DB_PATH=~/logbook/logbook.db alembic upgrade head
+uv run alembic upgrade head
 
 # Install and start as a system service (systemd on Linux, launchd on macOS)
 logbook install-service
@@ -203,7 +204,9 @@ It only shows tasks that aren't blocked, so everything it suggests is something 
 
 ### Where is my data?
 
-Everything is stored in a single file called `logbook.db` (default: `~/logbook/logbook.db`). It's a standard SQLite database. Your data never leaves your computer — there's no cloud service, no account, no sync.
+Everything is stored in a single file called `logbook.db` (default: `~/.logbook/logbook.db`). It's a standard SQLite database. Your data never leaves your computer — there's no cloud service, no account, no sync.
+
+You can relocate everything by setting `LOGBOOK_HOME` to a different directory.
 
 #### Backing up
 
@@ -240,8 +243,8 @@ The restore command stops the service, replaces the database, and restarts the s
 Since the database is a single SQLite file, you can also just copy it directly. Make sure to checkpoint the WAL first so nothing is left in the write-ahead log:
 
 ```bash
-sqlite3 ~/logbook/logbook.db "PRAGMA wal_checkpoint(TRUNCATE);"
-cp ~/logbook/logbook.db /your/backup/location/logbook.db
+sqlite3 ~/.logbook/logbook.db "PRAGMA wal_checkpoint(TRUNCATE);"
+cp ~/.logbook/logbook.db /your/backup/location/logbook.db
 ```
 
 ## REST API
@@ -275,7 +278,7 @@ All responses use a consistent envelope:
 When new features are added:
 
 ```bash
-cd ~/logbook
+cd ~/.logbook
 git pull
 logbook restart
 ```

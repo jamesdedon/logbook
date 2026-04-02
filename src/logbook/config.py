@@ -42,17 +42,24 @@ def _system_timezone() -> str:
     return "UTC"
 
 
+_DEFAULT_HOME = os.environ.get(
+    "LOGBOOK_HOME",
+    os.path.join(os.path.expanduser("~"), ".logbook"),
+)
+
+
 class Settings(BaseSettings):
-    db_path: str = os.path.join(os.path.expanduser("~"), "logbook", "logbook.db")
+    home: str = _DEFAULT_HOME
+    db_path: str = os.path.join(_DEFAULT_HOME, "logbook.db")
     host: str = "0.0.0.0"
     port: int = 8000
     timezone: str = _system_timezone()
-    project_dir: str = os.path.join(os.path.expanduser("~"), "logbook")
+    project_dir: str = _DEFAULT_HOME
     backup_path: str = "/mnt/nas-james/logbook"
 
     model_config = {
         "env_prefix": "LOGBOOK_",
-        "env_file": os.path.join(os.path.expanduser("~"), "logbook", ".env"),
+        "env_file": os.path.join(_DEFAULT_HOME, ".env"),
         "env_file_encoding": "utf-8",
         "extra": "ignore",
     }

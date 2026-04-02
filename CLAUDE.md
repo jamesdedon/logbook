@@ -6,25 +6,26 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ```bash
 # Run all tests
-python -m pytest tests/ -v
+uv run pytest tests/ -v
 
 # Run a single test file
-python -m pytest tests/test_tasks.py -v
+uv run pytest tests/test_tasks.py -v
 
 # Run a single test
-python -m pytest tests/test_tasks.py -k "test_task_dependencies" -v
+uv run pytest tests/test_tasks.py -k "test_task_dependencies" -v
 
-# Install package (after code changes, for non-editable install)
-pip install .
+# Install package (editable, with dev deps)
+uv pip install -e ".[dev]"
 
 # Run migrations
-LOGBOOK_DB_PATH=./logbook.db alembic upgrade head
+LOGBOOK_DB_PATH=./logbook.db uv run alembic upgrade head
 
 # Start server locally
-LOGBOOK_DB_PATH=./logbook.db uvicorn logbook.main:app --host 127.0.0.1 --port 8000
+LOGBOOK_DB_PATH=./logbook.db uv run uvicorn logbook.main:app --host 127.0.0.1 --port 8000
 
-# Restart the systemd service (after install)
-systemctl --user restart logbook
+# Restart the launchd service (after install)
+launchctl unload ~/Library/LaunchAgents/com.logbook.server.plist
+launchctl load ~/Library/LaunchAgents/com.logbook.server.plist
 ```
 
 ## Architecture
@@ -88,4 +89,10 @@ Always include commit metadata when the logged work directly corresponds to a co
 
 ## Configuration
 
-All env vars are prefixed `LOGBOOK_`. Key ones: `LOGBOOK_DB_PATH` (database file path), `LOGBOOK_HOST`, `LOGBOOK_PORT`. The CLI and MCP server use `LOGBOOK_URL` (default `http://localhost:8000`).
+All env vars are prefixed `LOGBOOK_`. Key ones:
+
+- `LOGBOOK_HOME` — base directory for DB, .env, and project files (default `~/.logbook`). All other paths derive from this unless individually overridden.
+- `LOGBOOK_DB_PATH` — database file path (default `$LOGBOOK_HOME/logbook.db`)
+- `LOGBOOK_HOST`, `LOGBOOK_PORT` — server bind address (default `0.0.0.0:8000`)
+
+The CLI and MCP server use `LOGBOOK_URL` (default `http://localhost:8000`).
