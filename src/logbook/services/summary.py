@@ -71,17 +71,8 @@ async def get_summary(db: AsyncSession) -> dict:
     )
     recent_activity = list(recent_result.scalars().all())
 
-    # Blocked tasks
-    blocked_subq = (
-        select(TaskDependency.blocked_id)
-        .join(Task, Task.id == TaskDependency.blocker_id)
-        .where(Task.status != "done")
-        .distinct()
-    )
-    blocked_result = await db.execute(
-        select(Task).where(Task.id.in_(blocked_subq), Task.status.in_(["todo", "in_progress"]))
-    )
-    blocked_tasks = list(blocked_result.scalars().all())
+    # Blocked tasks (reuse get_blocked_tasks which returns dicts with blocked_by info)
+    blocked_tasks = await get_blocked_tasks(db)
 
     # Next actions
     next_tasks = await get_next_actions(db)
