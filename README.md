@@ -66,6 +66,18 @@ uv venv
 uv pip install -e .
 ```
 
+Add the CLI to your PATH so it's available from any directory or virtual environment:
+
+```bash
+# For zsh (macOS default)
+echo 'export PATH="$HOME/.logbook/.venv/bin:$PATH"' >> ~/.zshrc
+source ~/.zshrc
+
+# For bash
+echo 'export PATH="$HOME/.logbook/.venv/bin:$PATH"' >> ~/.bashrc
+source ~/.bashrc
+```
+
 ### Start the server
 
 The easiest way — works on both Linux and macOS:
