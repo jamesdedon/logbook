@@ -929,6 +929,98 @@ def restart():
     _restart_service()
 
 
+def _install_wrappers(system: str):
+    """Install wrapper scripts for logbook and logbook-mcp into a standard PATH directory."""
+    import stat
+
+    if system == "Linux":
+        bin_dir = os.path.expanduser("~/.local/bin")
+    elif system == "Darwin":
+        bin_dir = "/usr/local/bin"
+    else:
+        return
+
+    os.makedirs(bin_dir, exist_ok=True)
+
+    venv_bin = os.path.join(os.path.dirname(os.path.dirname(sys.executable)), "bin")
+
+    for name in ("logbook", "logbook-mcp"):
+        venv_path = os.path.join(venv_bin, name)
+        wrapper_path = os.path.join(bin_dir, name)
+
+        if not os.path.exists(venv_path):
+            console.print(f"  [yellow]![/yellow] {name} not found in venv, skipping wrapper")
+            continue
+
+        # Skip if wrapper already points to the right place
+        if os.path.exists(wrapper_path):
+            try:
+                with open(wrapper_path) as f:
+                    content = f.read()
+                if venv_path in content:
+                    console.print(f"  [green]✓[/green] {wrapper_path} (already correct)")
+                    continue
+            except OSError:
+                pass
+
+        wrapper = f"#!/bin/bash\nexec {venv_path} \"$@\"\n"
+        with open(wrapper_path, "w") as f:
+            f.write(wrapper)
+        os.chmod(wrapper_path, os.stat(wrapper_path).st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
+        console.print(f"  [green]✓[/green] {wrapper_path}")
+
+    console.print(f"[green]Installed CLI wrappers to {bin_dir}.[/green]")
+
+
+def _configure_claude_mcp(settings):
+    """Configure Claude Code MCP server with the absolute path to logbook-mcp."""
+    import json
+
+    claude_config_path = os.path.expanduser("~/.claude.json")
+
+    venv_bin = os.path.join(os.path.dirname(os.path.dirname(sys.executable)), "bin")
+    mcp_bin = os.path.join(venv_bin, "logbook-mcp")
+
+    if not os.path.exists(mcp_bin):
+        console.print("  [yellow]![/yellow] logbook-mcp not found in venv, skipping Claude Code config")
+        return
+
+    mcp_entry = {
+        "type": "stdio",
+        "command": mcp_bin,
+        "args": [],
+        "env": {
+            "LOGBOOK_URL": f"http://localhost:{settings.port}",
+        },
+    }
+
+    try:
+        if os.path.exists(claude_config_path):
+            with open(claude_config_path) as f:
+                config = json.load(f)
+        else:
+            config = {}
+
+        servers = config.setdefault("mcpServers", {})
+
+        # Check if already configured with the right command
+        existing = servers.get("logbook", {})
+        if existing.get("command") == mcp_bin:
+            console.print(f"  [green]✓[/green] Claude Code MCP already configured")
+            return
+
+        servers["logbook"] = mcp_entry
+        with open(claude_config_path, "w") as f:
+            json.dump(config, f, indent=2)
+            f.write("\n")
+        console.print(f"[green]Configured Claude Code MCP server.[/green]")
+        console.print(f"  Command: {mcp_bin}")
+
+    except (json.JSONDecodeError, OSError) as e:
+        console.print(f"  [yellow]![/yellow] Could not configure Claude Code MCP: {e}")
+        console.print(f"  Run manually: claude mcp add logbook -s user -e LOGBOOK_URL=http://localhost:{settings.port} -- {mcp_bin}")
+
+
 @app.command("install-service")
 def install_service():
     """Install the logbook server as a system service (systemd on Linux, launchd on macOS)."""
@@ -1067,6 +1159,14 @@ WantedBy=default.target
         console.print(f"[red]Unsupported platform: {system}[/red]")
         raise typer.Exit(1)
 
+    # Install CLI wrapper scripts so logbook and logbook-mcp are on PATH
+    # without requiring the user to modify their shell rc files.
+    console.print()
+    _install_wrappers(system)
+
+    # Configure Claude Code MCP with the absolute path to logbook-mcp
+    _configure_claude_mcp(settings)
+
 
 @app.command("import-db")
 def import_db(
@@ -1163,7 +1263,7 @@ def backup(
     except Exception as e:
         console.print(f"[yellow]WAL checkpoint skipped:[/yellow] {e}")
 
-    shutil.copy2(source_path, output_path)
+    shutil.copyfile(source_path, output_path)
     console.print(f"[green]Backup saved to {output_path}[/green]")
 
 

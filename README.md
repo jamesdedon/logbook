@@ -66,21 +66,7 @@ uv venv
 uv pip install -e .
 ```
 
-Add the CLI to your PATH so it's available from any directory or virtual environment:
-
-```bash
-# For zsh (macOS default)
-echo 'export PATH="$HOME/.logbook/.venv/bin:$PATH"' >> ~/.zshrc
-source ~/.zshrc
-
-# For bash
-echo 'export PATH="$HOME/.logbook/.venv/bin:$PATH"' >> ~/.bashrc
-source ~/.bashrc
-```
-
 ### Start the server
-
-The easiest way — works on both Linux and macOS:
 
 ```bash
 # Run database migrations
@@ -90,7 +76,10 @@ uv run alembic upgrade head
 logbook install-service
 ```
 
-This creates the appropriate service file for your platform and starts the server. It will restart automatically on boot.
+This does three things:
+1. Creates the appropriate service file for your platform and starts the server (restarts automatically on boot).
+2. Installs `logbook` and `logbook-mcp` wrapper scripts to a standard PATH directory (`~/.local/bin` on Linux, `/usr/local/bin` on macOS) so they're available from any terminal.
+3. Configures Claude Code's MCP server with the correct absolute path to `logbook-mcp`.
 
 ### Verify it's running
 
@@ -101,16 +90,6 @@ curl http://localhost:8000/health
 You should see: `{"status":"ok"}`
 
 The API is available at `http://localhost:8000`. OpenAPI docs at `/docs`. Web dashboard at `http://localhost:8000/ui/`.
-
-### Connect Claude Code
-
-Run this once:
-
-```bash
-claude mcp add logbook -s user -e LOGBOOK_URL=http://localhost:8000 -- logbook-mcp
-```
-
-That's it. Claude Code now has access to Logbook in every session.
 
 ## Daily usage
 

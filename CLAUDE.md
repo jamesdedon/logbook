@@ -23,9 +23,12 @@ LOGBOOK_DB_PATH=./logbook.db uv run alembic upgrade head
 # Start server locally
 LOGBOOK_DB_PATH=./logbook.db uv run uvicorn logbook.main:app --host 127.0.0.1 --port 8000
 
-# Restart the launchd service (after install)
+# Restart the service (after install)
+# macOS:
 launchctl unload ~/Library/LaunchAgents/com.logbook.server.plist
 launchctl load ~/Library/LaunchAgents/com.logbook.server.plist
+# Linux:
+systemctl --user restart logbook
 ```
 
 ## Architecture
