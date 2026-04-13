@@ -102,7 +102,7 @@ async def get_today(db: AsyncSession = Depends(get_db)):
                 project_name=pname_cache.get(t.project_id, "Unknown"),
                 goal_id=t.goal_id,
                 title=t.title, description=t.description, rationale=t.rationale,
-                status=t.status, priority=t.priority,
+                notes=t.notes, status=t.status, priority=t.priority,
                 created_at=_to_local(t.created_at), updated_at=t.updated_at,
                 completed_at=t.completed_at,
             )

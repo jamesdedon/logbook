@@ -274,7 +274,7 @@ function renderLogEntries(logs) {
     out += `
       <div class="timeline-entry">
         <div class="timeline-time"><span class="timeline-date">${esc(shortDate(e.created_at))}</span> ${esc(time(e.created_at))}</div>
-        <div class="timeline-desc">${esc(e.description)}${ci ? " " + ci : ""}</div>
+        <div class="timeline-desc"><span class="timeline-body">${md(e.description)}</span>${ci ? " " + ci : ""}</div>
       </div>`;
   }
   return out;
@@ -595,7 +595,7 @@ function renderToday(data) {
       html += `
         <div class="timeline-entry">
           <div class="timeline-time">${esc(time(e.created_at))}</div>
-          <div class="timeline-desc">${esc(e.description)}${ci ? " " + ci : ""} ${proj}</div>
+          <div class="timeline-desc"><span class="timeline-body">${md(e.description)}</span>${ci ? " " + ci : ""} ${proj}</div>
         </div>`;
     }
     html += `</div>`;
@@ -609,7 +609,16 @@ function renderToday(data) {
       html += `<div class="project-group">`;
       html += `<div class="project-group-header">${esc(pname)}</div>`;
       for (const t of tasks) {
-        html += `<div class="item"><span class="check">&#10003;</span> ${esc(t.title)}</div>`;
+        html += `
+          <div class="task-row task-done task-expandable">
+            <span class="check">&#10003;</span> ${esc(t.title)}
+            <span class="task-toggle">&#9654;</span>
+          </div>
+          <div class="task-details collapsed">
+            ${detailField("Description", t.description)}
+            ${detailField("Rationale", t.rationale)}
+            ${notesField(t.id, t.notes)}
+          </div>`;
       }
       html += `</div>`;
     }
@@ -620,7 +629,9 @@ function renderToday(data) {
     html = `<p class="empty">No activity logged today.</p>`;
   }
 
-  content.innerHTML = html;
+  content.innerHTML = `<div class="tab-panel">${html}</div>`;
+  wireTaskToggles(content);
+  wireNotesEditors(content);
 }
 
 function renderWeekly(data) {
@@ -672,7 +683,7 @@ function renderWeekly(data) {
           html += `
             <div class="timeline-entry">
               <div class="timeline-time">${esc(time(e.created_at))}</div>
-              <div class="timeline-desc">${esc(e.description)}${ci ? " " + ci : ""}</div>
+              <div class="timeline-desc"><span class="timeline-body">${md(e.description)}</span>${ci ? " " + ci : ""}</div>
             </div>`;
         }
       }
@@ -689,7 +700,16 @@ function renderWeekly(data) {
       html += `<div class="project-group">`;
       html += `<div class="project-group-header">${esc(pname)}</div>`;
       for (const t of tasks) {
-        html += `<div class="item"><span class="check">&#10003;</span> ${esc(t.title)}</div>`;
+        html += `
+          <div class="task-row task-done task-expandable">
+            <span class="check">&#10003;</span> ${esc(t.title)}
+            <span class="task-toggle">&#9654;</span>
+          </div>
+          <div class="task-details collapsed">
+            ${detailField("Description", t.description)}
+            ${detailField("Rationale", t.rationale)}
+            ${notesField(t.id, t.notes)}
+          </div>`;
       }
       html += `</div>`;
     }
@@ -700,7 +720,9 @@ function renderWeekly(data) {
     html += `<p class="empty">No activity this week.</p>`;
   }
 
-  content.innerHTML = html;
+  content.innerHTML = `<div class="tab-panel">${html}</div>`;
+  wireTaskToggles(content);
+  wireNotesEditors(content);
 
   // Wire up week navigation
   $("#week-prev")?.addEventListener("click", () => {
@@ -719,7 +741,7 @@ function renderWeekly(data) {
 
 function renderHelp() {
   content.innerHTML = `
-<div class="help">
+<div class="tab-panel"><div class="help">
   <h2>Getting started</h2>
   <p>Logbook is a local work journal and planning tool. It runs on your machine, stores everything in a SQLite file, and is designed to work with Claude Code.</p>
 
@@ -819,7 +841,7 @@ function renderHelp() {
 
   <h2>API</h2>
   <p>REST API at <code>http://localhost:8000</code>. OpenAPI docs at <a href="/docs">/docs</a>. All responses use <code>{"data": ..., "meta": ...}</code> envelope.</p>
-</div>`;
+</div></div>`;
 }
 
 // --- Tab loading ---
@@ -855,7 +877,7 @@ async function loadTab(tab) {
       renderHelp();
       return;
     } else if (tab === "api") {
-      content.innerHTML = `<iframe src="/docs" class="api-frame"></iframe>`;
+      content.innerHTML = `<div class="tab-panel tab-panel-flush"><iframe src="/docs" class="api-frame"></iframe></div>`;
       return;
     }
   } catch (err) {
@@ -879,7 +901,7 @@ const TYPE_LABELS = {
 
 function renderSearch(data) {
   if (!data.results?.length) {
-    content.innerHTML = `<p class="empty">No results for "${esc(data.query)}".</p>`;
+    content.innerHTML = `<div class="tab-panel"><p class="empty">No results for "${esc(data.query)}".</p></div>`;
     return;
   }
 
@@ -913,7 +935,7 @@ function renderSearch(data) {
     }
     html += `</div>`;
   }
-  content.innerHTML = html;
+  content.innerHTML = `<div class="tab-panel">${html}</div>`;
 }
 
 let searchTimeout = null;
