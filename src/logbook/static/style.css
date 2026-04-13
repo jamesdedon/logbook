@@ -141,7 +141,7 @@ nav {
 }
 
 main {
-  max-width: 960px;
+  max-width: 1400px;
   margin: 24px auto;
   padding: 0 24px;
 }
@@ -197,6 +197,37 @@ main {
   flex-direction: column;
   gap: 12px;
   margin-bottom: 32px;
+}
+
+.summary-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 7fr) minmax(0, 3fr);
+  gap: 32px;
+  align-items: start;
+}
+
+.summary-main {
+  min-width: 0;
+}
+
+.summary-side {
+  min-width: 0;
+  position: sticky;
+  top: 16px;
+}
+
+.summary-side .section:last-child {
+  margin-bottom: 0;
+}
+
+@media (max-width: 900px) {
+  .summary-layout {
+    grid-template-columns: 1fr;
+    gap: 0;
+  }
+  .summary-side {
+    position: static;
+  }
 }
 
 .card {
@@ -296,6 +327,11 @@ main {
 .item-meta {
   font-size: 13px;
   color: var(--text-dim);
+}
+
+.item-meta-block {
+  display: block;
+  margin-top: 4px;
 }
 
 

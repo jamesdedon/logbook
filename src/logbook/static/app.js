@@ -372,6 +372,8 @@ function renderSummary(data, archivedProjects) {
   const archived = archivedProjects || [];
   const allProjects = includeArchived ? [...projects, ...archived] : projects;
 
+  html += `<div class="summary-layout"><div class="summary-main">`;
+
   if (allProjects.length) {
     html += `<div class="card-grid">`;
     for (const p of allProjects) {
@@ -401,6 +403,8 @@ function renderSummary(data, archivedProjects) {
     html += `</div>`;
   }
 
+  html += `</div><div class="summary-side">`;
+
   // Next actions
   if (data.next_actions?.length) {
     html += `<div class="section"><div class="section-title">Next up</div>`;
@@ -410,7 +414,9 @@ function renderSummary(data, archivedProjects) {
           <div class="item-title">
             <span class="${priorityClass(n.priority)}">${esc(n.priority)}</span>
             ${esc(n.title)}
-            <span class="item-meta">${esc(n.project_name)}</span>
+          </div>
+          <div class="item-meta item-meta-block">
+            ${esc(n.project_name)}
             <span class="task-toggle">&#9654;</span>
           </div>
           <div class="task-details collapsed">
@@ -444,6 +450,8 @@ function renderSummary(data, archivedProjects) {
     }
     html += `</div>`;
   }
+
+  html += `</div></div>`;
 
   if (!data.active_projects?.length) {
     html = `<p class="empty">No active projects.</p>`;
