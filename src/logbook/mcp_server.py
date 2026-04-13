@@ -502,16 +502,18 @@ def logbook_task_update(
     status: str | None = None,
     title: str | None = None,
     description: str | None = None,
+    rationale: str | None = None,
     notes: str | None = None,
     priority: str | None = None,
 ) -> str:
-    """Update a task's status, title, description, notes, or priority. Use status='done' to complete a task.
+    """Update a task's status, title, description, rationale, notes, or priority. Use status='done' to complete a task.
 
     Args:
         task_id: The task ID to update
         status: New status (todo, in_progress, done, cancelled)
         title: New title
-        description: New description
+        description: New description (what the work is)
+        rationale: New rationale (why this task is needed / what triggered it)
         notes: Additional context, findings, or running commentary on this task
         priority: New priority (low, medium, high, critical)
     """
@@ -520,9 +522,11 @@ def logbook_task_update(
         body["status"] = status
     if title:
         body["title"] = title
-    if description:
+    if description is not None:
         body["description"] = description
-    if notes:
+    if rationale is not None:
+        body["rationale"] = rationale
+    if notes is not None:
         body["notes"] = notes
     if priority:
         body["priority"] = priority
