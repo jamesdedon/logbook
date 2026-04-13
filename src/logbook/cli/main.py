@@ -933,13 +933,10 @@ def _install_wrappers(system: str):
     """Install wrapper scripts for logbook and logbook-mcp into a standard PATH directory."""
     import stat
 
-    if system == "Linux":
-        bin_dir = os.path.expanduser("~/.local/bin")
-    elif system == "Darwin":
-        bin_dir = "/usr/local/bin"
-    else:
+    if system not in ("Linux", "Darwin"):
         return
 
+    bin_dir = os.path.expanduser("~/.local/bin")
     os.makedirs(bin_dir, exist_ok=True)
 
     venv_bin = os.path.join(os.path.dirname(os.path.dirname(sys.executable)), "bin")
@@ -970,6 +967,12 @@ def _install_wrappers(system: str):
         console.print(f"  [green]✓[/green] {wrapper_path}")
 
     console.print(f"[green]Installed CLI wrappers to {bin_dir}.[/green]")
+
+    path_entries = os.environ.get("PATH", "").split(os.pathsep)
+    if bin_dir not in path_entries:
+        console.print(f"  [yellow]![/yellow] {bin_dir} is not on your PATH.")
+        console.print(f"  Add this line to your shell rc file (e.g. ~/.zshrc or ~/.bashrc):")
+        console.print(f'    export PATH="$HOME/.local/bin:$PATH"')
 
 
 def _configure_claude_mcp(settings):
@@ -1162,7 +1165,11 @@ WantedBy=default.target
     # Install CLI wrapper scripts so logbook and logbook-mcp are on PATH
     # without requiring the user to modify their shell rc files.
     console.print()
-    _install_wrappers(system)
+    try:
+        _install_wrappers(system)
+    except OSError as e:
+        console.print(f"  [yellow]![/yellow] Could not install CLI wrappers: {e}")
+        console.print(f"  You can still invoke logbook via the full venv path: {sys.executable} -m logbook")
 
     # Configure Claude Code MCP with the absolute path to logbook-mcp
     _configure_claude_mcp(settings)
