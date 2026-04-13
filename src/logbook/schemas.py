@@ -110,6 +110,10 @@ class TaskCreate(BaseModel):
     blocked_by: list[str] = []
 
 
+class TaskBatchCreate(BaseModel):
+    tasks: list[TaskCreate]
+
+
 class TaskUpdate(BaseModel):
     title: str | None = None
     description: str | None = None

@@ -41,6 +41,45 @@ async def create_task(
     return task
 
 
+async def create_tasks_batch(
+    db: AsyncSession,
+    project_id: str,
+    items: list[dict],
+) -> list[Task]:
+    """Insert N tasks in a single transaction. Each item is a dict matching TaskCreate fields.
+
+    blocked_by references must point to task IDs that exist before this batch; batch-internal
+    references (e.g. naming a task in the same batch as a blocker) are not supported.
+    """
+    created: list[Task] = []
+    pending_tags: list[Tag] = []
+    pending_deps: list[TaskDependency] = []
+    for item in items:
+        task = Task(
+            project_id=project_id,
+            title=item["title"],
+            description=item.get("description", ""),
+            rationale=item.get("rationale", ""),
+            notes=item.get("notes", ""),
+            priority=item.get("priority", "medium"),
+            goal_id=item.get("goal_id"),
+        )
+        db.add(task)
+        created.append(task)
+    await db.flush()
+    for task, item in zip(created, items):
+        for t in item.get("tags") or []:
+            pending_tags.append(Tag(entity_type="task", entity_id=task.id, tag=t))
+        for blocker_id in item.get("blocked_by") or []:
+            pending_deps.append(TaskDependency(blocker_id=blocker_id, blocked_id=task.id))
+    for obj in pending_tags + pending_deps:
+        db.add(obj)
+    await db.commit()
+    for task in created:
+        await db.refresh(task)
+    return created
+
+
 async def list_tasks(
     db: AsyncSession,
     project_id: str | None = None,

@@ -524,6 +524,35 @@ def logbook_task_create(
 
 
 @mcp.tool()
+def logbook_tasks_create(project_id: str, tasks: list[dict]) -> str:
+    """Create multiple tasks in a single transaction.
+
+    Ergonomic alternative to calling logbook_task_create N times when seeding several tasks
+    for the same project. All tasks are inserted atomically; any validation error aborts the
+    whole batch.
+
+    Args:
+        project_id: Project ID all tasks in the batch belong to
+        tasks: List of task dicts. Each supports the same fields as logbook_task_create:
+            title (required), description, rationale, notes, priority, goal_id, blocked_by.
+            blocked_by references must point to task IDs that already exist — batch-internal
+            blocker references (naming a sibling task in the same batch) are not supported.
+    """
+    if not tasks:
+        return "Nothing to create — tasks list is empty."
+    data = _post(f"/projects/{project_id}/tasks/batch", {"tasks": tasks})["data"]
+    lines = [f"Created {len(data)} tasks."]
+    for t in data:
+        lines.append("")
+        lines.append(_format_task(t))
+    missing_rationale = [t["title"] for t in data if not t.get("rationale")]
+    result = "\n".join(lines)
+    if missing_rationale:
+        result += f"\n\n→ No rationale provided for: {', '.join(missing_rationale)}. Consider adding rationale so future-you knows why."
+    return result
+
+
+@mcp.tool()
 def logbook_task_update(
     task_id: str,
     status: TaskStatus | None = None,

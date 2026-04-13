@@ -11,6 +11,7 @@ from logbook.schemas import (
     ListResponse,
     LogEntryBrief,
     Meta,
+    TaskBatchCreate,
     TaskCreate,
     TaskDepRef,
     TaskOut,
@@ -62,6 +63,17 @@ async def create_task(project_id: str, body: TaskCreate, db: AsyncSession = Depe
     )
     out = await _task_to_out(db, task.id)
     return ItemResponse(data=out)
+
+
+@router.post("/projects/{project_id}/tasks/batch", response_model=ListResponse)
+async def create_tasks_batch(project_id: str, body: TaskBatchCreate, db: AsyncSession = Depends(get_db)):
+    project_id = await resolve_project_id(db, project_id)
+    if not body.tasks:
+        raise HTTPException(status_code=400, detail="tasks list must not be empty")
+    items = [t.model_dump() for t in body.tasks]
+    tasks = await svc.create_tasks_batch(db, project_id=project_id, items=items)
+    outs = [await _task_to_out(db, t.id) for t in tasks]
+    return ListResponse(data=outs, meta=Meta(total=len(outs), limit=len(outs), offset=0))
 
 
 @router.get("/tasks", response_model=ListResponse)
