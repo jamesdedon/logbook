@@ -37,9 +37,26 @@ def _to_local_time(iso_str: str) -> str:
         return iso_str[11:16] if len(iso_str) > 16 else ""
 
 mcp = FastMCP("logbook", instructions=(
-    "Logbook is a local work journal and planning tool. "
-    "Use these tools to log work, manage tasks, and check what's next. "
-    "Log work as you complete it. Check 'summary' or 'next' at session start."
+    "Logbook is a local work journal and planning tool. Three core concepts:\n\n"
+    "- **Tasks** (`logbook_task_*`) are intended/planned work items. They move "
+    "todo → in_progress → done (or cancelled) and carry a rationale (why) distinct "
+    "from description (what). Use `blocked_by` with existing task IDs to express "
+    "dependencies — a task is blocked when any blocker is not done.\n"
+    "- **Logs** (`logbook_log`) are append-only journal entries recording work that "
+    "has *already happened*. Tasks describe intent; logs describe history. Log "
+    "entries can link to a project and/or a task, and can carry git metadata "
+    "(repo/branch/commits). Log after each meaningful unit of work, not just at "
+    "session end.\n"
+    "- **Goals** (`logbook_goal_*`) are project-scoped milestones (e.g. 'Ship v1') "
+    "that group related tasks. They have an optional target date and motivation. "
+    "Attach a task to a goal via `goal_id` on create.\n\n"
+    "Priority (`low|medium|high|critical`) is metadata only. It is *not* used for "
+    "sorting except in the ranked next-action list returned by `logbook_next` / "
+    "`logbook_summary` (ordered by priority → unblocks-count → age). Treat "
+    "`critical` as 'most important', not 'fire right now'.\n\n"
+    "Typical session flow: call `logbook_summary` or `logbook_next` at start to "
+    "pick up context, seed tasks with `logbook_tasks_create` (batch) when planning "
+    "new work, and call `logbook_log` after each commit or meaningful deliverable."
 ))
 
 BASE_URL = os.environ.get("LOGBOOK_URL", "http://localhost:8000")
