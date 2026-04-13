@@ -241,6 +241,28 @@ function renderNextItems(items) {
   return out;
 }
 
+function renderBlockedItems(items) {
+  if (!items.length) return `<p class="empty">No blocked tasks.</p>`;
+  let out = "";
+  for (const bt of items) {
+    const blockers = bt.blocked_by.map((b) => esc(b.title)).join(", ");
+    out += `
+      <div class="item item-expandable">
+        <div class="item-title">
+          ${esc(bt.title)}
+          <span class="task-toggle">&#9654;</span>
+        </div>
+        <div class="item-meta">waiting on: ${blockers}</div>
+        <div class="task-details collapsed">
+          ${detailField("Description", bt.description)}
+          ${detailField("Rationale", bt.rationale)}
+          ${notesField(bt.id, bt.notes)}
+        </div>
+      </div>`;
+  }
+  return out;
+}
+
 function wireNextFilters(container) {
   const section = container.querySelector("[data-next-section]");
   if (!section) return;
@@ -249,12 +271,19 @@ function wireNextFilters(container) {
   const itemsEl = container.querySelector(".next-items");
 
   const refresh = async () => {
-    const params = new URLSearchParams({ limit: limitSelect.value });
-    if (projectSelect.value) params.set("project_id", projectSelect.value);
     itemsEl.innerHTML = `<p class="loading">Loading...</p>`;
+    const showBlocked = projectSelect.value === "__blocked__";
+    limitSelect.disabled = showBlocked;
     try {
-      const data = await api(`/summary/next?${params.toString()}`);
-      itemsEl.innerHTML = renderNextItems(data?.tasks || []);
+      if (showBlocked) {
+        const data = await api(`/summary/blocked`);
+        itemsEl.innerHTML = renderBlockedItems(data?.data || []);
+      } else {
+        const params = new URLSearchParams({ limit: limitSelect.value });
+        if (projectSelect.value) params.set("project_id", projectSelect.value);
+        const data = await api(`/summary/next?${params.toString()}`);
+        itemsEl.innerHTML = renderNextItems(data?.tasks || []);
+      }
       wireTaskToggles(itemsEl);
       wireNotesEditors(itemsEl);
     } catch (err) {
@@ -479,6 +508,7 @@ function renderSummary(data, archivedProjects) {
         Project
         <select class="next-project-select" aria-label="Filter by project">
           <option value="">All</option>
+          <option value="__blocked__">Blocked</option>
           ${projectOptions}
         </select>
       </label>
@@ -496,28 +526,6 @@ function renderSummary(data, archivedProjects) {
   <div class="column-body">
     <div class="next-items">${renderNextItems(data.next_actions || [])}</div>
   </div>`;
-
-  // Blocked
-  if (data.blocked_tasks?.length) {
-    html += `<div class="section"><div class="section-title">Blocked</div>`;
-    for (const bt of data.blocked_tasks) {
-      const blockers = bt.blocked_by.map((b) => esc(b.title)).join(", ");
-      html += `
-        <div class="item item-expandable">
-          <div class="item-title">
-            ${esc(bt.title)}
-            <span class="task-toggle">&#9654;</span>
-          </div>
-          <div class="item-meta">waiting on: ${blockers}</div>
-          <div class="task-details collapsed">
-            ${detailField("Description", bt.description)}
-            ${detailField("Rationale", bt.rationale)}
-            ${notesField(bt.id, bt.notes)}
-          </div>
-        </div>`;
-    }
-    html += `</div>`;
-  }
 
   html += `</div></div>`;
 
