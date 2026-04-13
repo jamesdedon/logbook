@@ -215,6 +215,41 @@ function wireTaskToggles(container) {
 
 // --- Renderers ---
 
+function renderLogEntries(logs) {
+  let out = "";
+  for (const e of logs) {
+    const ci = commitInfo(e.metadata);
+    out += `
+      <div class="timeline-entry">
+        <div class="timeline-time"><span class="timeline-date">${esc(shortDate(e.created_at))}</span> ${esc(time(e.created_at))}</div>
+        <div class="timeline-desc">${esc(e.description)}${ci ? " " + ci : ""}</div>
+      </div>`;
+  }
+  return out;
+}
+
+function wireLogLimitSelect(container) {
+  for (const select of container.querySelectorAll(".log-limit-select")) {
+    select.addEventListener("change", async (ev) => {
+      ev.stopPropagation();
+      const section = select.closest("[data-log-section]");
+      const projectId = section.dataset.projectId;
+      const entriesEl = section.querySelector(".log-entries");
+      const limit = select.value;
+      entriesEl.innerHTML = `<p class="loading">Loading...</p>`;
+      try {
+        const data = await api(`/log?project_id=${encodeURIComponent(projectId)}&limit=${limit}`);
+        const logs = Array.isArray(data) ? data : [];
+        entriesEl.innerHTML = logs.length ? renderLogEntries(logs) : `<p class="empty">No log entries.</p>`;
+      } catch (err) {
+        entriesEl.innerHTML = `<p class="error">Failed to load: ${esc(err.message)}</p>`;
+      }
+    });
+    // Don't let clicks on the select collapse the card
+    select.addEventListener("click", (ev) => ev.stopPropagation());
+  }
+}
+
 async function toggleProjectDetail(card, projectId) {
   const existing = card.querySelector(".card-detail");
   if (existing) {
@@ -290,16 +325,18 @@ async function toggleProjectDetail(card, projectId) {
     }
 
     if (logs.length) {
-      html += `<div class="detail-section"><div class="detail-label">Recent work</div>`;
-      for (const e of logs) {
-        const ci = commitInfo(e.metadata);
-        html += `
-          <div class="timeline-entry">
-            <div class="timeline-time"><span class="timeline-date">${esc(shortDate(e.created_at))}</span> ${esc(time(e.created_at))}</div>
-            <div class="timeline-desc">${esc(e.description)}${ci ? " " + ci : ""}</div>
-          </div>`;
-      }
-      html += `</div>`;
+      html += `<div class="detail-section" data-log-section data-project-id="${esc(projectId)}">
+        <div class="detail-label detail-label-row">
+          <span>Recent work</span>
+          <select class="log-limit-select" aria-label="Log entries to show">
+            <option value="10" selected>10</option>
+            <option value="20">20</option>
+            <option value="50">50</option>
+            <option value="500">All</option>
+          </select>
+        </div>
+        <div class="log-entries">${renderLogEntries(logs)}</div>
+      </div>`;
     }
 
     if (!tasks.length && !logs.length) {
@@ -309,6 +346,7 @@ async function toggleProjectDetail(card, projectId) {
     detail.innerHTML = html;
     wireTaskToggles(detail);
     wireNotesEditors(detail);
+    wireLogLimitSelect(detail);
   } catch (err) {
     detail.innerHTML = `<p class="error">Failed to load: ${esc(err.message)}</p>`;
   }

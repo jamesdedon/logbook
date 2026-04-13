@@ -481,6 +481,24 @@ main {
   margin-bottom: 6px;
 }
 
+.detail-label-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.log-limit-select {
+  font-size: 12px;
+  padding: 2px 6px;
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  text-transform: none;
+  letter-spacing: normal;
+}
+
 .detail-item {
   font-size: 14px;
   padding: 4px 0;
