@@ -206,6 +206,7 @@ class WorkLogOut(BaseModel):
 class ProjectSummary(BaseModel):
     id: str
     name: str
+    description: str = ""
     motivation: str = ""
     goals_active: int
     tasks_summary: dict[str, int]
@@ -217,6 +218,7 @@ class BlockedTaskOut(BaseModel):
     title: str
     description: str = ""
     rationale: str = ""
+    notes: str = ""
     project_id: str
     blocked_by: list[TaskDepRef]
 
@@ -226,6 +228,7 @@ class NextAction(BaseModel):
     title: str
     description: str = ""
     rationale: str = ""
+    notes: str = ""
     priority: str
     project_id: str
     project_name: str

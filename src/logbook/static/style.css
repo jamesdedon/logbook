@@ -545,8 +545,8 @@ main {
   padding: 4px 0 8px 28px;
   border-bottom: 1px solid var(--border);
   overflow: hidden;
-  transition: max-height 0.2s ease, opacity 0.2s ease;
-  max-height: 300px;
+  transition: max-height 0.3s ease, opacity 0.2s ease;
+  max-height: 4000px;
   opacity: 1;
 }
 
@@ -555,10 +555,11 @@ main {
   opacity: 0;
   padding-top: 0;
   padding-bottom: 0;
+  border-bottom: none;
 }
 
 .task-detail-field {
-  margin-bottom: 4px;
+  margin-bottom: 10px;
   line-height: 1.5;
 }
 
@@ -572,7 +573,113 @@ main {
   text-transform: uppercase;
   letter-spacing: 0.4px;
   color: var(--accent);
-  margin-right: 6px;
+  margin-bottom: 2px;
+}
+
+.task-detail-body > *:first-child { margin-top: 0; }
+.task-detail-body > *:last-child { margin-bottom: 0; }
+.task-detail-body p { margin: 0 0 8px 0; }
+.task-detail-body ul,
+.task-detail-body ol { margin: 4px 0 8px 0; padding-left: 20px; }
+.task-detail-body li { margin-bottom: 2px; }
+.task-detail-body code {
+  background: var(--bg);
+  padding: 1px 4px;
+  border-radius: 3px;
+  font-size: 12px;
+}
+.task-detail-body pre {
+  background: var(--bg);
+  padding: 8px;
+  border-radius: 4px;
+  overflow-x: auto;
+  font-size: 12px;
+}
+.task-detail-body pre code { background: none; padding: 0; }
+.task-detail-body h1,
+.task-detail-body h2,
+.task-detail-body h3,
+.task-detail-body h4 { margin: 8px 0 4px 0; font-size: 13px; font-weight: 600; }
+.task-detail-body a { color: var(--accent); }
+
+.task-detail-empty {
+  font-style: italic;
+  color: var(--text-dim);
+  opacity: 0.7;
+}
+
+.notes-edit-btn {
+  background: none;
+  border: none;
+  color: var(--text-dim);
+  cursor: pointer;
+  font-size: 12px;
+  padding: 0 4px;
+  margin-left: 4px;
+  vertical-align: baseline;
+}
+
+.notes-edit-btn:hover { color: var(--accent); }
+
+.notes-textarea {
+  width: 100%;
+  font-family: inherit;
+  font-size: 13px;
+  padding: 6px 8px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--bg);
+  color: var(--text);
+  resize: vertical;
+  box-sizing: border-box;
+}
+
+.notes-edit-actions {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  margin-top: 4px;
+}
+
+.notes-edit-actions button {
+  font-size: 12px;
+  padding: 3px 10px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text);
+  border-radius: 3px;
+  cursor: pointer;
+}
+
+.notes-save-btn {
+  background: var(--accent) !important;
+  color: var(--bg) !important;
+  border-color: var(--accent) !important;
+}
+
+.notes-edit-actions button:disabled { opacity: 0.5; cursor: default; }
+
+.notes-status {
+  font-size: 12px;
+  color: var(--text-dim);
+}
+
+.card-about-toggle {
+  font-size: 12px;
+  color: var(--text-dim);
+  margin-top: 10px;
+  cursor: pointer;
+  user-select: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.card-about-toggle:hover { color: var(--text); }
+
+.card-about {
+  padding-left: 0;
+  margin-top: 4px;
 }
 
 .pill-priority-critical { background: var(--red-bg); color: var(--red); }

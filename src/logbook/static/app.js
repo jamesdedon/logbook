@@ -23,6 +23,109 @@ function esc(str) {
   return el.innerHTML;
 }
 
+// Render long-form markdown text. marked escapes HTML in text by default.
+function md(str) {
+  if (!str) return "";
+  if (typeof marked === "undefined") return esc(str).replace(/\n/g, "<br>");
+  return marked.parse(String(str), { breaks: true, gfm: true });
+}
+
+function detailField(label, value) {
+  if (!value) return "";
+  return `<div class="task-detail-field"><div class="task-detail-label">${label}</div><div class="task-detail-body">${md(value)}</div></div>`;
+}
+
+// Notes field that's always rendered (so label is visible when empty) and includes an inline editor.
+function notesField(taskId, value) {
+  const body = value
+    ? `<div class="task-detail-body">${md(value)}</div>`
+    : `<div class="task-detail-body task-detail-empty">No notes yet.</div>`;
+  return `<div class="task-detail-field" data-notes-task-id="${esc(taskId)}">
+    <div class="task-detail-label">
+      Notes
+      <button class="notes-edit-btn" type="button" title="Edit notes">&#9998;</button>
+    </div>
+    <div class="notes-view">${body}</div>
+    <div class="notes-edit" hidden>
+      <textarea class="notes-textarea" rows="6" placeholder="Add notes (markdown supported)..."></textarea>
+      <div class="notes-edit-actions">
+        <button class="notes-save-btn" type="button">Save</button>
+        <button class="notes-cancel-btn" type="button">Cancel</button>
+        <span class="notes-status"></span>
+      </div>
+    </div>
+  </div>`;
+}
+
+async function saveNotes(taskId, notes) {
+  const resp = await fetch(`/tasks/${taskId}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ notes }),
+  });
+  if (!resp.ok) throw new Error(`${resp.status} ${resp.statusText}`);
+  const json = await resp.json();
+  return json.data;
+}
+
+function wireNotesEditors(container) {
+  for (const field of container.querySelectorAll("[data-notes-task-id]")) {
+    const taskId = field.dataset.notesTaskId;
+    const editBtn = field.querySelector(".notes-edit-btn");
+    const view = field.querySelector(".notes-view");
+    const edit = field.querySelector(".notes-edit");
+    const textarea = field.querySelector(".notes-textarea");
+    const saveBtn = field.querySelector(".notes-save-btn");
+    const cancelBtn = field.querySelector(".notes-cancel-btn");
+    const status = field.querySelector(".notes-status");
+
+    const stop = (e) => e.stopPropagation();
+    for (const el of [editBtn, edit, textarea, saveBtn, cancelBtn]) {
+      el.addEventListener("click", stop);
+    }
+
+    let originalText = "";
+    editBtn.addEventListener("click", async () => {
+      try {
+        const resp = await fetch(`/tasks/${taskId}`);
+        const data = (await resp.json()).data;
+        originalText = data.notes || "";
+      } catch {
+        originalText = "";
+      }
+      textarea.value = originalText;
+      view.hidden = true;
+      edit.hidden = false;
+      textarea.focus();
+    });
+
+    cancelBtn.addEventListener("click", () => {
+      edit.hidden = true;
+      view.hidden = false;
+      status.textContent = "";
+    });
+
+    saveBtn.addEventListener("click", async () => {
+      const newText = textarea.value;
+      saveBtn.disabled = true;
+      status.textContent = "Saving...";
+      try {
+        const data = await saveNotes(taskId, newText);
+        view.innerHTML = data.notes
+          ? `<div class="task-detail-body">${md(data.notes)}</div>`
+          : `<div class="task-detail-body task-detail-empty">No notes yet.</div>`;
+        edit.hidden = true;
+        view.hidden = false;
+        status.textContent = "";
+      } catch (err) {
+        status.textContent = `Failed: ${err.message}`;
+      } finally {
+        saveBtn.disabled = false;
+      }
+    });
+  }
+}
+
 function time(isoStr) {
   if (!isoStr || isoStr.length < 16) return "";
   try {
@@ -152,27 +255,18 @@ async function toggleProjectDetail(card, projectId) {
       html += `<div class="detail-section"><div class="detail-label">Tasks</div>`;
       for (const t of activeTasks) {
         const statusClass = t.status === "in_progress" ? "pill pill-active" : "pill pill-todo";
-        const hasDetails = t.description || t.rationale || t.notes;
         html += `
-          <div class="task-row${hasDetails ? " task-expandable" : ""}">
+          <div class="task-row task-expandable">
             <span class="pill pill-priority-${t.priority}">${esc(t.priority)}</span>
             <span class="task-title">${esc(t.title)}</span>
             <span class="${statusClass}">${esc(t.status.replace("_", " "))}</span>
-            ${hasDetails ? '<span class="task-toggle">&#9654;</span>' : ""}
+            <span class="task-toggle">&#9654;</span>
+          </div>
+          <div class="task-details collapsed">
+            ${detailField("Description", t.description)}
+            ${detailField("Rationale", t.rationale)}
+            ${notesField(t.id, t.notes)}
           </div>`;
-        if (hasDetails) {
-          html += `<div class="task-details collapsed">`;
-          if (t.description) {
-            html += `<div class="task-detail-field"><span class="task-detail-label">Description</span> ${esc(t.description)}</div>`;
-          }
-          if (t.rationale) {
-            html += `<div class="task-detail-field"><span class="task-detail-label">Rationale</span> ${esc(t.rationale)}</div>`;
-          }
-          if (t.notes) {
-            html += `<div class="task-detail-field"><span class="task-detail-label">Notes</span> ${esc(t.notes)}</div>`;
-          }
-          html += `</div>`;
-        }
       }
       html += `</div>`;
     }
@@ -180,26 +274,17 @@ async function toggleProjectDetail(card, projectId) {
     if (doneTasks.length) {
       html += `<div class="detail-section"><div class="detail-label">Completed</div>`;
       for (const t of doneTasks) {
-        const hasDetails = t.description || t.rationale || t.notes;
         const completedDate = t.completed_at ? `<span class="task-completed-date">${esc(shortDate(t.completed_at))}</span>` : "";
         html += `
-          <div class="task-row task-done${hasDetails ? " task-expandable" : ""}">
+          <div class="task-row task-done task-expandable">
             <span class="check">&#10003;</span> ${esc(t.title)} ${completedDate}
-            ${hasDetails ? '<span class="task-toggle">&#9654;</span>' : ""}
+            <span class="task-toggle">&#9654;</span>
+          </div>
+          <div class="task-details collapsed">
+            ${detailField("Description", t.description)}
+            ${detailField("Rationale", t.rationale)}
+            ${notesField(t.id, t.notes)}
           </div>`;
-        if (hasDetails) {
-          html += `<div class="task-details collapsed">`;
-          if (t.description) {
-            html += `<div class="task-detail-field"><span class="task-detail-label">Description</span> ${esc(t.description)}</div>`;
-          }
-          if (t.rationale) {
-            html += `<div class="task-detail-field"><span class="task-detail-label">Rationale</span> ${esc(t.rationale)}</div>`;
-          }
-          if (t.notes) {
-            html += `<div class="task-detail-field"><span class="task-detail-label">Notes</span> ${esc(t.notes)}</div>`;
-          }
-          html += `</div>`;
-        }
       }
       html += `</div>`;
     }
@@ -223,6 +308,7 @@ async function toggleProjectDetail(card, projectId) {
 
     detail.innerHTML = html;
     wireTaskToggles(detail);
+    wireNotesEditors(detail);
   } catch (err) {
     detail.innerHTML = `<p class="error">Failed to load: ${esc(err.message)}</p>`;
   }
@@ -251,17 +337,23 @@ function renderSummary(data, archivedProjects) {
       const isArchived = p.status === "archived";
       const archiveLabel = isArchived ? "Unarchive" : "Archive";
       const archiveAction = isArchived ? "active" : "archived";
+      const hasAbout = p.description || p.motivation;
       html += `
         <div class="card card-clickable${isArchived ? " card-archived" : ""}" data-project-id="${esc(p.id)}">
           <button class="card-archive-btn" data-project-id="${esc(p.id)}" data-action="${archiveAction}" title="${archiveLabel}">${archiveLabel}</button>
           <h3>${esc(p.name)}${isArchived ? ' <span class="pill pill-archived">archived</span>' : ""}</h3>
-          ${p.motivation ? `<div class="motivation">${esc(p.motivation)}</div>` : ""}
           <div class="pills">
             ${ts.todo ? `<span class="pill pill-todo">${ts.todo} todo</span>` : ""}
             ${ts.in_progress ? `<span class="pill pill-active">${ts.in_progress} active</span>` : ""}
             ${ts.done ? `<span class="pill pill-done">${ts.done} done</span>` : ""}
             ${p.blocked_tasks ? `<span class="pill pill-blocked">${p.blocked_tasks} blocked</span>` : ""}
           </div>
+          ${hasAbout ? `
+            <div class="card-about-toggle"><span class="task-toggle">&#9654;</span> About</div>
+            <div class="card-about task-details collapsed">
+              ${detailField("Description", p.description)}
+              ${detailField("Motivation", p.motivation)}
+            </div>` : ""}
         </div>`;
     }
     html += `</div>`;
@@ -271,19 +363,19 @@ function renderSummary(data, archivedProjects) {
   if (data.next_actions?.length) {
     html += `<div class="section"><div class="section-title">Next up</div>`;
     for (const n of data.next_actions) {
-      const hasDetails = n.description || n.rationale;
       html += `
-        <div class="item${hasDetails ? " item-expandable" : ""}">
+        <div class="item item-expandable">
           <div class="item-title">
             <span class="${priorityClass(n.priority)}">${esc(n.priority)}</span>
             ${esc(n.title)}
             <span class="item-meta">${esc(n.project_name)}</span>
-            ${hasDetails ? '<span class="task-toggle">&#9654;</span>' : ""}
+            <span class="task-toggle">&#9654;</span>
           </div>
-          ${hasDetails ? `<div class="task-details collapsed">
-            ${n.description ? `<div class="task-detail-field"><span class="task-detail-label">Description</span> ${esc(n.description)}</div>` : ""}
-            ${n.rationale ? `<div class="task-detail-field"><span class="task-detail-label">Rationale</span> ${esc(n.rationale)}</div>` : ""}
-          </div>` : ""}
+          <div class="task-details collapsed">
+            ${detailField("Description", n.description)}
+            ${detailField("Rationale", n.rationale)}
+            ${notesField(n.id, n.notes)}
+          </div>
         </div>`;
     }
     html += `</div>`;
@@ -294,18 +386,18 @@ function renderSummary(data, archivedProjects) {
     html += `<div class="section"><div class="section-title">Blocked</div>`;
     for (const bt of data.blocked_tasks) {
       const blockers = bt.blocked_by.map((b) => esc(b.title)).join(", ");
-      const hasDetails = bt.description || bt.rationale;
       html += `
-        <div class="item${hasDetails ? " item-expandable" : ""}">
+        <div class="item item-expandable">
           <div class="item-title">
             ${esc(bt.title)}
-            ${hasDetails ? '<span class="task-toggle">&#9654;</span>' : ""}
+            <span class="task-toggle">&#9654;</span>
           </div>
           <div class="item-meta">waiting on: ${blockers}</div>
-          ${hasDetails ? `<div class="task-details collapsed">
-            ${bt.description ? `<div class="task-detail-field"><span class="task-detail-label">Description</span> ${esc(bt.description)}</div>` : ""}
-            ${bt.rationale ? `<div class="task-detail-field"><span class="task-detail-label">Rationale</span> ${esc(bt.rationale)}</div>` : ""}
-          </div>` : ""}
+          <div class="task-details collapsed">
+            ${detailField("Description", bt.description)}
+            ${detailField("Rationale", bt.rationale)}
+            ${notesField(bt.id, bt.notes)}
+          </div>
         </div>`;
     }
     html += `</div>`;
@@ -320,9 +412,22 @@ function renderSummary(data, archivedProjects) {
   // Wire up card clicks
   for (const card of $$(".card-clickable")) {
     card.addEventListener("click", (e) => {
-      // Don't toggle if clicking inside the detail area or archive button
-      if (e.target.closest(".card-detail") || e.target.closest(".card-archive-btn")) return;
+      // Don't toggle if clicking inside the detail area, archive button, or about section
+      if (e.target.closest(".card-detail") || e.target.closest(".card-archive-btn") ||
+          e.target.closest(".card-about-toggle") || e.target.closest(".card-about")) return;
       toggleProjectDetail(card, card.dataset.projectId);
+    });
+  }
+
+  // Wire up "About" toggles on cards
+  for (const tog of $$(".card-about-toggle")) {
+    tog.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const about = tog.nextElementSibling;
+      const arrow = tog.querySelector(".task-toggle");
+      if (!about) return;
+      const collapsed = about.classList.toggle("collapsed");
+      arrow?.classList.toggle("expanded", !collapsed);
     });
   }
 
@@ -347,6 +452,7 @@ function renderSummary(data, archivedProjects) {
 
   // Wire up task detail toggles
   wireTaskToggles(content);
+  wireNotesEditors(content);
 
   // Wire up archived toggle
   const toggle = $("#archived-toggle");
@@ -617,7 +723,7 @@ async function loadTab(tab) {
         const allProjects = await api("/projects?status=archived");
         const activeIds = new Set((summaryData.active_projects || []).map((p) => p.id));
         archivedProjects = (Array.isArray(allProjects) ? allProjects : []).filter((p) => !activeIds.has(p.id)).map((p) => ({
-          id: p.id, name: p.name, motivation: p.motivation || "", status: p.status,
+          id: p.id, name: p.name, description: p.description || "", motivation: p.motivation || "", status: p.status,
           goals_active: 0, tasks_summary: {}, blocked_tasks: 0,
         }));
       }

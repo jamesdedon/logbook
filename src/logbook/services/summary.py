@@ -54,6 +54,7 @@ async def get_summary(db: AsyncSession) -> dict:
         active_projects.append({
             "id": p.id,
             "name": p.name,
+            "description": p.description or "",
             "motivation": p.motivation or "",
             "goals_active": goals_by_project.get(p.id, 0),
             "tasks_summary": {
@@ -163,6 +164,7 @@ async def get_next_actions(db: AsyncSession, limit: int = 10) -> list[dict]:
             "title": t.title,
             "description": t.description or "",
             "rationale": t.rationale or "",
+            "notes": t.notes or "",
             "priority": t.priority,
             "project_id": t.project_id,
             "project_name": pname_map.get(t.project_id, "unknown"),
@@ -311,6 +313,7 @@ async def get_blocked_tasks(db: AsyncSession) -> list[dict]:
             "title": task.title,
             "description": task.description or "",
             "rationale": task.rationale or "",
+            "notes": task.notes or "",
             "project_id": task.project_id,
             "blocked_by": [
                 {"id": b.id, "title": b.title, "status": b.status}
