@@ -30,9 +30,9 @@ Logbook solves this by:
 - **Summary endpoints**: today, next actions, blocked tasks, weekly report
 - **Full-text search** across all entities (FTS5 with stemming and prefix matching)
 - **Markdown export** for weekly reports, filterable by project
-- **Web dashboard** at `http://localhost:8000/ui/` — summary cards, today timeline, weekly report with navigation, full-text search, light/dark theme
+- **Web dashboard** at `http://localhost:8000/ui/` — two-column summary (projects + filterable Next Up) with independent scrolling, today timeline, weekly report with navigation, full-text search, light/dark theme, optional background image
 - **CLI** (`logbook`) for terminal workflows
-- **MCP server** for native Claude Code integration (18 tools)
+- **MCP server** for native Claude Code integration (25 tools)
 - **REST API** with clean JSON responses for any agent or script
 - **SQLite** — single file, no external dependencies
 - **Cross-platform** — runs on Linux and macOS
@@ -45,7 +45,7 @@ Logbook has four parts:
 
 2. **A command-line tool** (`logbook`) that lets you interact with it from your terminal. You can log work, check your tasks, see summaries, and search.
 
-3. **A web dashboard** at `http://localhost:8000/ui/` for visual overviews. Three tabs — Summary (project cards you can click to expand), Today (timeline), and Weekly (stats + project-grouped entries with week navigation). Includes full-text search and a light/dark theme toggle.
+3. **A web dashboard** at `http://localhost:8000/ui/` for visual overviews. Three tabs — Summary (two columns: projects on the left, a filterable Next Up sidebar on the right), Today (timeline), and Weekly (stats + project-grouped entries with week navigation). Includes full-text search, light/dark theme toggle, and an optional custom background image.
 
 4. **A connection to Claude Code** so that Claude can use Logbook directly. When you start a session, Claude can check what's on your plate. When you finish work, Claude can log it.
 
@@ -78,7 +78,7 @@ logbook install-service
 
 This does three things:
 1. Creates the appropriate service file for your platform and starts the server (restarts automatically on boot).
-2. Installs `logbook` and `logbook-mcp` wrapper scripts to a standard PATH directory (`~/.local/bin` on Linux, `/usr/local/bin` on macOS) so they're available from any terminal.
+2. Installs `logbook` and `logbook-mcp` wrapper scripts to `~/.local/bin` (user-writable on macOS, Linux, and Fedora Silverblue) so they're available from any terminal. If the directory isn't on your `PATH`, the installer prints a one-line `export` hint for your shell rc file.
 3. Configures Claude Code's MCP server with the correct absolute path to `logbook-mcp`.
 
 ### Verify it's running
@@ -154,7 +154,7 @@ logbook summary --json
 
 Open `http://localhost:8000/ui/` in your browser. Useful for standups or quick status checks.
 
-- **Summary tab** — Project cards with task count pills. Click a card to expand and see its tasks (with priority pills and rationale) and recent work log timeline.
+- **Summary tab** — Two-column layout: project cards on the left (with an Include Archived toggle in the header), and a Next Up sidebar on the right filtered by project and show-count (10 / 20 / 50 / All). Columns scroll independently with their headers pinned. Click a project card to expand and see its tasks (with priority pills and rationale) and a Recent work timeline with its own page-size dropdown (10 / 20 / 50 / All). Optional background image via the picker in the lower-left corner — persists locally per browser.
 
   ![Summary tab](summary.jpg)
 
