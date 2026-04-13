@@ -488,6 +488,17 @@ main {
   gap: 8px;
 }
 
+.log-limit-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  color: var(--text-dim);
+}
+
 .log-limit-select {
   font-size: 12px;
   padding: 2px 6px;

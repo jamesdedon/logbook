@@ -245,8 +245,9 @@ function wireLogLimitSelect(container) {
         entriesEl.innerHTML = `<p class="error">Failed to load: ${esc(err.message)}</p>`;
       }
     });
-    // Don't let clicks on the select collapse the card
+    // Don't let clicks on the select (or its label wrapper) collapse the card
     select.addEventListener("click", (ev) => ev.stopPropagation());
+    select.closest(".log-limit-label")?.addEventListener("click", (ev) => ev.stopPropagation());
   }
 }
 
@@ -328,12 +329,15 @@ async function toggleProjectDetail(card, projectId) {
       html += `<div class="detail-section" data-log-section data-project-id="${esc(projectId)}">
         <div class="detail-label detail-label-row">
           <span>Recent work</span>
-          <select class="log-limit-select" aria-label="Log entries to show">
-            <option value="10" selected>10</option>
-            <option value="20">20</option>
-            <option value="50">50</option>
-            <option value="500">All</option>
-          </select>
+          <label class="log-limit-label">
+            Show
+            <select class="log-limit-select" aria-label="Log entries to show">
+              <option value="10" selected>10</option>
+              <option value="20">20</option>
+              <option value="50">50</option>
+              <option value="500">All</option>
+            </select>
+          </label>
         </div>
         <div class="log-entries">${renderLogEntries(logs)}</div>
       </div>`;
