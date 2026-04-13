@@ -904,22 +904,26 @@ def restart():
 
     from logbook.config import settings
 
+    import shutil
+
     is_pipx = "pipx/venvs" in sys.prefix
+    is_uv_venv = os.path.exists(os.path.join(sys.prefix, "pyvenv.cfg")) and (
+        "uv" in open(os.path.join(sys.prefix, "pyvenv.cfg")).read()
+    )
 
     if is_pipx:
         console.print("[cyan]Reinstalling logbook via pipx...[/cyan]")
-        result = subprocess.run(
-            ["pipx", "install", "--force", "."],
-            capture_output=True, text=True,
-            cwd=settings.project_dir,
-        )
+        cmd = ["pipx", "install", "--force", "."]
+    elif is_uv_venv and shutil.which("uv"):
+        console.print("[cyan]Reinstalling logbook via uv pip...[/cyan]")
+        cmd = ["uv", "pip", "install", "-e", "."]
     else:
         console.print("[cyan]Reinstalling logbook via pip...[/cyan]")
-        result = subprocess.run(
-            ["pip", "install", "."],
-            capture_output=True, text=True,
-            cwd=settings.project_dir,
-        )
+        cmd = [sys.executable, "-m", "pip", "install", "."]
+
+    result = subprocess.run(
+        cmd, capture_output=True, text=True, cwd=settings.project_dir,
+    )
 
     if result.returncode != 0:
         console.print(f"[red]Install failed:[/red] {result.stderr.strip()}")
