@@ -246,7 +246,7 @@ function wireNextFilters(container) {
   if (!section) return;
   const projectSelect = section.querySelector(".next-project-select");
   const limitSelect = section.querySelector(".next-limit-select");
-  const itemsEl = section.querySelector(".next-items");
+  const itemsEl = container.querySelector(".next-items");
 
   const refresh = async () => {
     const params = new URLSearchParams({ limit: limitSelect.value });
@@ -418,14 +418,16 @@ function renderSummary(data, archivedProjects) {
 
   html += `<div class="summary-layout"><div class="summary-main">`;
 
-  html += `<div class="section">
-    <div class="section-title section-title-row">
-      <span>Projects</span>
+  html += `<div class="section-title section-title-stack column-header">
+    <span>Projects</span>
+    <div class="section-controls">
       <label class="toggle-label">
         <input type="checkbox" id="archived-toggle" ${includeArchived ? "checked" : ""} />
         Include Archived
       </label>
-    </div>`;
+    </div>
+  </div>
+  <div class="column-body">`;
 
   if (allProjects.length) {
     html += `<div class="card-grid">`;
@@ -456,7 +458,7 @@ function renderSummary(data, archivedProjects) {
     html += `</div>`;
   }
 
-  html += `</div>`; // close Projects section
+  html += `</div>`; // close .column-body
 
   html += `</div><div class="summary-side">`;
 
@@ -470,28 +472,28 @@ function renderSummary(data, archivedProjects) {
     .map((p) => `<option value="${esc(p.id)}">${esc(p.name)}</option>`)
     .join("");
 
-  html += `<div class="section" data-next-section>
-    <div class="section-title section-title-row">
-      <span>Next up</span>
-      <div class="next-filters">
-        <label class="filter-label">
-          Project
-          <select class="next-project-select" aria-label="Filter by project">
-            <option value="">All</option>
-            ${projectOptions}
-          </select>
-        </label>
-        <label class="filter-label">
-          Show
-          <select class="next-limit-select" aria-label="Number of tasks to show">
-            <option value="10" selected>10</option>
-            <option value="20">20</option>
-            <option value="50">50</option>
-            <option value="500">All</option>
-          </select>
-        </label>
-      </div>
+  html += `<div class="section-title section-title-stack column-header" data-next-section>
+    <span>Next up</span>
+    <div class="section-controls">
+      <label class="filter-label">
+        Project
+        <select class="next-project-select" aria-label="Filter by project">
+          <option value="">All</option>
+          ${projectOptions}
+        </select>
+      </label>
+      <label class="filter-label">
+        Show
+        <select class="next-limit-select" aria-label="Number of tasks to show">
+          <option value="10" selected>10</option>
+          <option value="20">20</option>
+          <option value="50">50</option>
+          <option value="500">All</option>
+        </select>
+      </label>
     </div>
+  </div>
+  <div class="column-body">
     <div class="next-items">${renderNextItems(data.next_actions || [])}</div>
   </div>`;
 
@@ -964,6 +966,50 @@ $("#theme-toggle").addEventListener("click", () => {
   const next = current === "dark" ? "light" : "dark";
   localStorage.setItem("logbook-theme", next);
   setTheme(next);
+});
+
+// --- Background image picker ---
+
+const BG_KEY = "logbook-bg-image";
+
+function applyBackground(dataUrl) {
+  const clearBtn = $("#bg-clear");
+  if (dataUrl) {
+    document.body.style.setProperty("--bg-image", `url("${dataUrl}")`);
+    clearBtn.hidden = false;
+  } else {
+    document.body.style.removeProperty("--bg-image");
+    clearBtn.hidden = true;
+  }
+}
+
+applyBackground(localStorage.getItem(BG_KEY));
+
+$("#bg-choose").addEventListener("click", () => $("#bg-file").click());
+
+$("#bg-file").addEventListener("change", (ev) => {
+  const file = ev.target.files?.[0];
+  if (!file) return;
+  if (!/^image\/(jpeg|png)$/.test(file.type)) {
+    alert("Please choose a JPG or PNG image.");
+    return;
+  }
+  const reader = new FileReader();
+  reader.onload = () => {
+    try {
+      localStorage.setItem(BG_KEY, reader.result);
+      applyBackground(reader.result);
+    } catch (err) {
+      alert(`Could not save background: ${err.message} — try a smaller image.`);
+    }
+  };
+  reader.readAsDataURL(file);
+  ev.target.value = "";
+});
+
+$("#bg-clear").addEventListener("click", () => {
+  localStorage.removeItem(BG_KEY);
+  applyBackground(null);
 });
 
 // --- Init ---
