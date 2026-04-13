@@ -4,5 +4,10 @@ __pycache__/
 dist/
 build/
 *.db
+*.db-shm
+*.db-wal
 .pytest_cache/
 .venv/
+.env
+.claude/
+uv.lock
