@@ -277,7 +277,7 @@ function wireNextFilters(container) {
     try {
       if (showBlocked) {
         const data = await api(`/summary/blocked`);
-        itemsEl.innerHTML = renderBlockedItems(data?.data || []);
+        itemsEl.innerHTML = renderBlockedItems(data || []);
       } else {
         const params = new URLSearchParams({ limit: limitSelect.value });
         if (projectSelect.value) params.set("project_id", projectSelect.value);
