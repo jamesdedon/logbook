@@ -107,7 +107,9 @@ async def get_today(db: AsyncSession) -> dict:
     return {"log_entries": log_entries, "tasks_completed": tasks_completed}
 
 
-async def get_next_actions(db: AsyncSession, limit: int = 10) -> list[dict]:
+async def get_next_actions(
+    db: AsyncSession, limit: int = 10, project_id: str | None = None
+) -> list[dict]:
     # Unblocked todo/in_progress tasks, ordered by priority then unblocks-count then age
     blocked_subq = (
         select(TaskDependency.blocked_id)
@@ -142,6 +144,8 @@ async def get_next_actions(db: AsyncSession, limit: int = 10) -> list[dict]:
         .order_by(priority_order, literal_column("unblocks").desc(), Task.created_at.asc())
         .limit(limit)
     )
+    if project_id is not None:
+        stmt = stmt.where(Task.project_id == project_id)
 
     result = await db.execute(stmt)
     rows = result.all()

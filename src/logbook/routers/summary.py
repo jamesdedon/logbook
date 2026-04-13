@@ -112,8 +112,12 @@ async def get_today(db: AsyncSession = Depends(get_db)):
 
 
 @router.get("/next", response_model=ItemResponse)
-async def get_next(db: AsyncSession = Depends(get_db)):
-    next_actions = await svc.get_next_actions(db)
+async def get_next(
+    project_id: str | None = None,
+    limit: int = 10,
+    db: AsyncSession = Depends(get_db),
+):
+    next_actions = await svc.get_next_actions(db, limit=limit, project_id=project_id)
     now = datetime.now(timezone.utc).isoformat()
     return ItemResponse(data=NextOut(
         generated_at=now,

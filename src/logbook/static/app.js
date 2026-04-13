@@ -215,6 +215,58 @@ function wireTaskToggles(container) {
 
 // --- Renderers ---
 
+function renderNextItems(items) {
+  if (!items.length) {
+    return `<p class="empty">No tasks match.</p>`;
+  }
+  let out = "";
+  for (const n of items) {
+    out += `
+      <div class="item item-card item-expandable item-priority-${esc(n.priority)}">
+        <div class="item-title">${esc(n.title)}</div>
+        <div class="item-meta item-meta-block item-meta-row">
+          <span class="item-project">
+            ${esc(n.project_name)}
+            <span class="task-toggle">&#9654;</span>
+          </span>
+          <span class="${priorityClass(n.priority)}">${esc(n.priority)}</span>
+        </div>
+        <div class="task-details collapsed">
+          ${detailField("Description", n.description)}
+          ${detailField("Rationale", n.rationale)}
+          ${notesField(n.id, n.notes)}
+        </div>
+      </div>`;
+  }
+  return out;
+}
+
+function wireNextFilters(container) {
+  const section = container.querySelector("[data-next-section]");
+  if (!section) return;
+  const projectSelect = section.querySelector(".next-project-select");
+  const limitSelect = section.querySelector(".next-limit-select");
+  const itemsEl = section.querySelector(".next-items");
+
+  const refresh = async () => {
+    const params = new URLSearchParams({ limit: limitSelect.value });
+    if (projectSelect.value) params.set("project_id", projectSelect.value);
+    itemsEl.innerHTML = `<p class="loading">Loading...</p>`;
+    try {
+      const data = await api(`/summary/next?${params.toString()}`);
+      itemsEl.innerHTML = renderNextItems(data?.tasks || []);
+      wireTaskToggles(itemsEl);
+      wireNotesEditors(itemsEl);
+    } catch (err) {
+      itemsEl.innerHTML = `<p class="error">Failed to load: ${esc(err.message)}</p>`;
+    }
+  };
+
+  for (const sel of [projectSelect, limitSelect]) {
+    sel.addEventListener("change", refresh);
+  }
+}
+
 function renderLogEntries(logs) {
   let out = "";
   for (const e of logs) {
@@ -359,20 +411,21 @@ async function toggleProjectDetail(card, projectId) {
 function renderSummary(data, archivedProjects) {
   let html = "";
 
-  // Include Archived toggle
-  html += `<div class="summary-controls">
-    <label class="toggle-label">
-      <input type="checkbox" id="archived-toggle" ${includeArchived ? "checked" : ""} />
-      Include Archived
-    </label>
-  </div>`;
-
   // Project cards
   const projects = data.active_projects || [];
   const archived = archivedProjects || [];
   const allProjects = includeArchived ? [...projects, ...archived] : projects;
 
   html += `<div class="summary-layout"><div class="summary-main">`;
+
+  html += `<div class="section">
+    <div class="section-title section-title-row">
+      <span>Projects</span>
+      <label class="toggle-label">
+        <input type="checkbox" id="archived-toggle" ${includeArchived ? "checked" : ""} />
+        Include Archived
+      </label>
+    </div>`;
 
   if (allProjects.length) {
     html += `<div class="card-grid">`;
@@ -403,31 +456,44 @@ function renderSummary(data, archivedProjects) {
     html += `</div>`;
   }
 
+  html += `</div>`; // close Projects section
+
   html += `</div><div class="summary-side">`;
 
-  // Next actions
-  if (data.next_actions?.length) {
-    html += `<div class="section"><div class="section-title">Next up</div>`;
-    for (const n of data.next_actions) {
-      html += `
-        <div class="item item-expandable">
-          <div class="item-title">
-            <span class="${priorityClass(n.priority)}">${esc(n.priority)}</span>
-            ${esc(n.title)}
-          </div>
-          <div class="item-meta item-meta-block">
-            ${esc(n.project_name)}
-            <span class="task-toggle">&#9654;</span>
-          </div>
-          <div class="task-details collapsed">
-            ${detailField("Description", n.description)}
-            ${detailField("Rationale", n.rationale)}
-            ${notesField(n.id, n.notes)}
-          </div>
-        </div>`;
-    }
-    html += `</div>`;
-  }
+  // Next actions — always render the section header + filters, even when empty,
+  // so the user can change the project filter and find tasks.
+  const projectsWithActiveTodos = projects.filter((p) => {
+    const ts = p.tasks_summary || {};
+    return (ts.todo || 0) + (ts.in_progress || 0) > 0;
+  });
+  const projectOptions = projectsWithActiveTodos
+    .map((p) => `<option value="${esc(p.id)}">${esc(p.name)}</option>`)
+    .join("");
+
+  html += `<div class="section" data-next-section>
+    <div class="section-title section-title-row">
+      <span>Next up</span>
+      <div class="next-filters">
+        <label class="filter-label">
+          Project
+          <select class="next-project-select" aria-label="Filter by project">
+            <option value="">All</option>
+            ${projectOptions}
+          </select>
+        </label>
+        <label class="filter-label">
+          Show
+          <select class="next-limit-select" aria-label="Number of tasks to show">
+            <option value="10" selected>10</option>
+            <option value="20">20</option>
+            <option value="50">50</option>
+            <option value="500">All</option>
+          </select>
+        </label>
+      </div>
+    </div>
+    <div class="next-items">${renderNextItems(data.next_actions || [])}</div>
+  </div>`;
 
   // Blocked
   if (data.blocked_tasks?.length) {
@@ -503,6 +569,7 @@ function renderSummary(data, archivedProjects) {
   // Wire up task detail toggles
   wireTaskToggles(content);
   wireNotesEditors(content);
+  wireNextFilters(content);
 
   // Wire up archived toggle
   const toggle = $("#archived-toggle");
