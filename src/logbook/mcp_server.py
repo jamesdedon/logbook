@@ -4,6 +4,7 @@ import json
 import os
 import textwrap
 from datetime import datetime, timezone
+from typing import Literal
 
 import httpx
 from mcp.server.fastmcp import FastMCP
@@ -11,6 +12,10 @@ from mcp.server.fastmcp import FastMCP
 from logbook.config import settings
 
 WRAP_WIDTH = 100
+
+Priority = Literal["low", "medium", "high", "critical"]
+TaskStatus = Literal["todo", "in_progress", "done", "cancelled"]
+ProjectStatus = Literal["active", "archived"]
 
 
 def _wrap(text: str, indent: str = "  ") -> str:
@@ -363,7 +368,7 @@ def logbook_project_update(
     name: str | None = None,
     description: str | None = None,
     motivation: str | None = None,
-    status: str | None = None,
+    status: ProjectStatus | None = None,
 ) -> str:
     """Update a project's name, description, motivation, or status.
 
@@ -428,7 +433,7 @@ def logbook_project_unarchive(project_id: str) -> str:
 def logbook_tasks(
     project_id: str | None = None,
     status: str = "todo,in_progress",
-    priority: str | None = None,
+    priority: Priority | None = None,
     blocked: bool | None = None,
     limit: int = 20,
 ) -> str:
@@ -467,7 +472,7 @@ def logbook_task_create(
     description: str = "",
     rationale: str = "",
     notes: str = "",
-    priority: str = "medium",
+    priority: Priority = "medium",
     goal_id: str | None = None,
     blocked_by: list[str] | None = None,
 ) -> str:
@@ -499,12 +504,12 @@ def logbook_task_create(
 @mcp.tool()
 def logbook_task_update(
     task_id: str,
-    status: str | None = None,
+    status: TaskStatus | None = None,
     title: str | None = None,
     description: str | None = None,
     rationale: str | None = None,
     notes: str | None = None,
-    priority: str | None = None,
+    priority: Priority | None = None,
 ) -> str:
     """Update a task's status, title, description, rationale, notes, or priority. Use status='done' to complete a task.
 
