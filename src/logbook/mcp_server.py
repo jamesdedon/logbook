@@ -233,7 +233,24 @@ def logbook_log(
         body["metadata"] = {"git": git_info}
 
     data = _post("/log", body)["data"]
-    return f"Logged: {data['description']} (id: {data['id']})"
+    lines = [f"Logged entry id: {data['id']}"]
+    lines.append(_wrap(data['description']))
+    links = []
+    if data.get("project_id"):
+        pn = data.get("project_name") or data["project_id"]
+        links.append(f"project: {pn} ({data['project_id']})")
+    if data.get("task_id"):
+        links.append(f"task: {data['task_id']}")
+    git = (data.get("metadata") or {}).get("git") or {}
+    if git.get("repo"):
+        links.append(f"repo: {git['repo']}")
+    if git.get("branch"):
+        links.append(f"branch: {git['branch']}")
+    if git.get("commits"):
+        links.append(f"commits: {', '.join(git['commits'])}")
+    if links:
+        lines.append("  " + " | ".join(links))
+    return "\n".join(lines)
 
 
 @mcp.tool()
@@ -335,10 +352,25 @@ def logbook_project_create(name: str, description: str = "", motivation: str = "
         motivation: Why does this project exist? What problem does it solve?
     """
     data = _post("/projects", {"name": name, "description": description, "motivation": motivation})["data"]
-    result = f"Created project: {data['name']} (id: {data['id']})"
+    result = "Created project.\n" + _format_project(data)
     if not motivation:
-        result += "\n\n→ No motivation provided. Why does this project exist? Call logbook_project_detail to update, or recreate with motivation= to record it."
+        result += "\n\n→ No motivation provided. Why does this project exist? Call logbook_project_update to record it."
     return result
+
+
+def _format_project(data: dict) -> str:
+    """Format a project dict into the canonical human-readable block used by create/update/detail."""
+    lines = [f"Project: {data['name']} (id: {data['id']}, status: {data['status']})"]
+    if data.get("description"):
+        lines.append(_wrap(data['description']))
+    if data.get("motivation"):
+        lines.append(_wrap(f"Motivation: {data['motivation']}"))
+    counts = data.get("counts") or {}
+    if counts:
+        lines.append(_wrap(f"Goals: {counts.get('goals', 0)}"))
+        lines.append(_wrap(f"Tasks: {counts.get('tasks_todo', 0)} todo, {counts.get('tasks_in_progress', 0)} active, "
+                           f"{counts.get('tasks_done', 0)} done"))
+    return "\n".join(lines)
 
 
 @mcp.tool()
@@ -349,17 +381,7 @@ def logbook_project_detail(project_id: str) -> str:
         project_id: The project ID
     """
     data = _get(f"/projects/{project_id}")["data"]
-    motivation = data.get("motivation", "")
-    counts = data.get("counts", {})
-    lines = [f"Project: {data['name']} ({data['status']})"]
-    if data.get("description"):
-        lines.append(_wrap(data['description']))
-    if motivation:
-        lines.append(_wrap(f"Motivation: {motivation}"))
-    lines.append(_wrap(f"Goals: {counts.get('goals', 0)}"))
-    lines.append(_wrap(f"Tasks: {counts.get('tasks_todo', 0)} todo, {counts.get('tasks_in_progress', 0)} active, "
-                       f"{counts.get('tasks_done', 0)} done"))
-    return "\n".join(lines)
+    return _format_project(data)
 
 
 @mcp.tool()
@@ -391,7 +413,7 @@ def logbook_project_update(
     if not body:
         return "Nothing to update — provide at least one field."
     data = _patch(f"/projects/{project_id}", body)["data"]
-    return f"Updated project: {data['name']} (id: {data['id']}, status: {data['status']})"
+    return "Updated project.\n" + _format_project(data)
 
 
 @mcp.tool()
@@ -495,7 +517,7 @@ def logbook_task_create(
         body["blocked_by"] = blocked_by
 
     data = _post(f"/projects/{project_id}/tasks", body)["data"]
-    result = f"Created task: {data['title']} (id: {data['id']}, priority: {data['priority']})"
+    result = "Created task.\n" + _format_task(data)
     if not rationale:
         result += "\n\n→ No rationale provided. Why is this task needed? What triggered it?"
     return result
@@ -537,19 +559,14 @@ def logbook_task_update(
         body["priority"] = priority
 
     data = _patch(f"/tasks/{task_id}", body)["data"]
-    return f"Updated task: {data['title']} — {data['status']} (priority: {data['priority']})"
+    return "Updated task.\n" + _format_task(data)
 
 
-@mcp.tool()
-def logbook_task_detail(task_id: str) -> str:
-    """Get full detail on a task including dependencies and recent log entries.
-
-    Args:
-        task_id: The task ID
-    """
-    data = _get(f"/tasks/{task_id}")["data"]
+def _format_task(data: dict) -> str:
+    """Format a task dict into the canonical human-readable block used by create/update/detail."""
     pname = data.get("project_name", "")
-    lines = [f"Task: {data['title']} [{data['status']}] (priority: {data['priority']}, project: {pname})"]
+    project_part = f", project: {pname}" if pname else ""
+    lines = [f"Task: {data['title']} [id: {data['id']}, status: {data['status']}, priority: {data['priority']}{project_part}]"]
     if data.get("description"):
         lines.append(_wrap(data['description']))
     if data.get("rationale"):
@@ -561,16 +578,27 @@ def logbook_task_detail(task_id: str) -> str:
     if data.get("blocked_by"):
         lines.append("  Blocked by:")
         for b in data["blocked_by"]:
-            lines.append(_wrap(f"- {b['title']} ({b['status']})", indent="    "))
+            lines.append(_wrap(f"- {b['title']} ({b['status']}) [id: {b.get('id', '?')}]", indent="    "))
     if data.get("blocks"):
         lines.append("  Blocks:")
         for b in data["blocks"]:
-            lines.append(_wrap(f"- {b['title']} ({b['status']})", indent="    "))
+            lines.append(_wrap(f"- {b['title']} ({b['status']}) [id: {b.get('id', '?')}]", indent="    "))
     if data.get("recent_log_entries"):
         lines.append("  Recent work:")
         for e in data["recent_log_entries"]:
             lines.append(_wrap(f"- {e['description']}", indent="    "))
     return "\n".join(lines)
+
+
+@mcp.tool()
+def logbook_task_detail(task_id: str) -> str:
+    """Get full detail on a task including dependencies and recent log entries.
+
+    Args:
+        task_id: The task ID
+    """
+    data = _get(f"/tasks/{task_id}")["data"]
+    return _format_task(data)
 
 
 # --- Goal tools ---
@@ -596,7 +624,13 @@ def logbook_goal_create(
     if target_date:
         body["target_date"] = target_date
     data = _post(f"/projects/{project_id}/goals", body)["data"]
-    result = f"Created goal: {data['title']} (id: {data['id']})"
+    target = f", target: {data['target_date']}" if data.get("target_date") else ""
+    lines = [f"Created goal: {data['title']} (id: {data['id']}, status: {data['status']}{target})"]
+    if data.get("description"):
+        lines.append(_wrap(data["description"]))
+    if data.get("motivation"):
+        lines.append(_wrap(f"Motivation: {data['motivation']}"))
+    result = "\n".join(lines)
     if not motivation:
         result += "\n\n→ No motivation provided. Why is this goal important? What does achieving it unlock?"
     return result
