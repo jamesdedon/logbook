@@ -906,6 +906,12 @@ const TYPE_LABELS = {
   task: "Tasks",
   work_log_entry: "Work log",
 };
+const TYPE_DETAIL_PATH = {
+  project: (id) => `/projects/${id}`,
+  goal: (id) => `/goals/${id}`,
+  task: (id) => `/tasks/${id}`,
+  work_log_entry: (id) => `/log/${id}`,
+};
 
 function renderSearch(data) {
   if (!data.results?.length) {
@@ -921,29 +927,128 @@ function renderSearch(data) {
     if (!results) continue;
     html += `<div class="section"><div class="section-title">${TYPE_LABELS[type]}</div>`;
     for (const r of results) {
-      const body = r.body_snippet?.trim();
-      if (r.entity_type === "work_log_entry") {
-        const projPart = r.project_name ? `<span class="search-project">${esc(r.project_name)}</span>` : "";
-        const timePart = r.created_at ? time(r.created_at) : "";
-        const meta = [projPart, timePart].filter(Boolean).join(" \u00b7 ");
-        html += `
-          <div class="search-result">
-            <div class="search-log-text">${highlight(r.title_snippet)}</div>
-            ${meta ? `<div class="item-meta">${meta}</div>` : ""}
-          </div>`;
-      } else {
-        const projectNote = r.project_name ? `<div class="item-meta"><span class="search-project">${esc(r.project_name)}</span></div>` : "";
-        html += `
-          <div class="search-result">
-            <div class="item-title">${highlight(r.title_snippet)}</div>
-            ${body && body !== "{}" ? `<div class="item-meta">${highlight(body)}</div>` : ""}
-            ${projectNote}
-          </div>`;
-      }
+      html += renderSearchCard(r);
     }
     html += `</div>`;
   }
   content.innerHTML = `<div class="tab-panel">${html}</div>`;
+  wireSearchCards(content);
+}
+
+function renderSearchCard(r) {
+  const body = r.body_snippet?.trim();
+  const isLog = r.entity_type === "work_log_entry";
+  const projPart = r.project_name ? `<span class="search-project">${esc(r.project_name)}</span>` : "";
+  const timePart = isLog && r.created_at ? time(r.created_at) : "";
+  const meta = [projPart, timePart].filter(Boolean).join(" \u00b7 ");
+  const titleHtml = isLog
+    ? `<div class="search-log-text">${highlight(r.title_snippet)}</div>`
+    : `<div class="item-title">${highlight(r.title_snippet)}</div>`;
+  const snippetHtml = !isLog && body && body !== "{}"
+    ? `<div class="item-meta search-snippet">${highlight(body)}</div>`
+    : "";
+  return `
+    <div class="item item-card search-result item-expandable"
+         data-entity-type="${esc(r.entity_type)}"
+         data-entity-id="${esc(r.entity_id)}">
+      ${titleHtml}
+      ${snippetHtml}
+      <div class="item-meta item-meta-block item-meta-row">
+        <span class="item-project">
+          ${meta || "&nbsp;"}
+          <span class="task-toggle">&#9654;</span>
+        </span>
+      </div>
+      <div class="task-details collapsed"></div>
+    </div>`;
+}
+
+function wireSearchCards(container) {
+  for (const card of container.querySelectorAll(".search-result")) {
+    card.addEventListener("click", async (ev) => {
+      if (ev.target.closest(".task-details") || ev.target.closest("a, button, textarea, input")) return;
+      const details = card.querySelector(".task-details");
+      const toggle = card.querySelector(".task-toggle");
+      const isCollapsed = details.classList.contains("collapsed");
+      if (isCollapsed && !card.dataset.loaded) {
+        details.innerHTML = `<p class="loading">Loading...</p>`;
+        try {
+          const type = card.dataset.entityType;
+          const id = card.dataset.entityId;
+          const entity = await api(TYPE_DETAIL_PATH[type](id));
+          details.innerHTML = renderEntityDetail(type, entity);
+          card.dataset.loaded = "1";
+          wireNotesEditors(details);
+        } catch (err) {
+          details.innerHTML = `<p class="error">Failed to load: ${esc(err.message)}</p>`;
+        }
+      }
+      details.classList.toggle("collapsed");
+      if (toggle) toggle.classList.toggle("expanded", !details.classList.contains("collapsed"));
+    });
+  }
+}
+
+function renderEntityDetail(type, e) {
+  const parts = [];
+  if (type === "project") {
+    parts.push(detailField("Description", e.description));
+    parts.push(detailField("Motivation", e.motivation));
+    if (e.status) parts.push(detailField("Status", e.status));
+    if (e.counts) {
+      const c = e.counts;
+      parts.push(detailField("Counts", `goals: ${c.goals ?? 0} · tasks: ${c.tasks ?? 0} · log entries: ${c.log_entries ?? 0}`));
+    }
+    if (e.tags?.length) parts.push(detailField("Tags", e.tags.join(", ")));
+    parts.push(detailField("Created", shortDate(e.created_at) + " " + time(e.created_at)));
+    parts.push(detailField("Updated", shortDate(e.updated_at) + " " + time(e.updated_at)));
+  } else if (type === "goal") {
+    parts.push(detailField("Description", e.description));
+    parts.push(detailField("Motivation", e.motivation));
+    if (e.status) parts.push(detailField("Status", e.status));
+    if (e.target_date) parts.push(detailField("Target date", e.target_date));
+    parts.push(detailField("Created", shortDate(e.created_at) + " " + time(e.created_at)));
+    parts.push(detailField("Updated", shortDate(e.updated_at) + " " + time(e.updated_at)));
+  } else if (type === "task") {
+    parts.push(detailField("Project", e.project_name));
+    parts.push(detailField("Status", `${e.status}${e.is_blocked ? " (blocked)" : ""}`));
+    parts.push(detailField("Priority", e.priority));
+    parts.push(detailField("Description", e.description));
+    parts.push(detailField("Rationale", e.rationale));
+    parts.push(notesField(e.id, e.notes || ""));
+    if (e.blocked_by?.length) {
+      const list = e.blocked_by.map((b) => `${esc(b.title)} (${esc(b.status)})`).join(", ");
+      parts.push(detailField("Blocked by", list));
+    }
+    if (e.blocks?.length) {
+      const list = e.blocks.map((b) => `${esc(b.title)} (${esc(b.status)})`).join(", ");
+      parts.push(detailField("Blocks", list));
+    }
+    if (e.tags?.length) parts.push(detailField("Tags", e.tags.join(", ")));
+    if (e.recent_log_entries?.length) {
+      const entries = e.recent_log_entries
+        .map((le) => `- ${shortDate(le.created_at)} ${time(le.created_at)}: ${esc(le.description)}`)
+        .join("\n");
+      parts.push(detailField("Recent work", entries));
+    }
+    parts.push(detailField("Created", shortDate(e.created_at) + " " + time(e.created_at)));
+    if (e.completed_at) parts.push(detailField("Completed", shortDate(e.completed_at) + " " + time(e.completed_at)));
+  } else if (type === "work_log_entry") {
+    if (e.project_name) parts.push(detailField("Project", e.project_name));
+    if (e.task_id) parts.push(detailField("Task ID", e.task_id));
+    parts.push(detailField("Logged", shortDate(e.created_at) + " " + time(e.created_at)));
+    parts.push(detailField("Description", e.description));
+    if (e.tags?.length) parts.push(detailField("Tags", e.tags.join(", ")));
+    const git = e.metadata?.git;
+    if (git) {
+      const bits = [];
+      if (git.repo) bits.push(`repo: ${git.repo}`);
+      if (git.branch) bits.push(`branch: ${git.branch}`);
+      if (git.commits?.length) bits.push(`commits: ${git.commits.join(", ")}`);
+      if (bits.length) parts.push(detailField("Git", bits.join(" · ")));
+    }
+  }
+  return parts.filter(Boolean).join("");
 }
 
 let searchTimeout = null;

@@ -984,11 +984,14 @@ main {
 }
 
 .search-result {
-  padding: 8px 0;
-  border-bottom: 1px solid var(--border);
+  margin-bottom: 8px;
 }
 
-.search-result:last-child { border-bottom: none; }
+.search-result:last-child { margin-bottom: 0; }
+
+.search-snippet {
+  margin-top: 4px;
+}
 
 .search-log-text {
   font-size: 14px;
