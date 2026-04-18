@@ -51,7 +51,7 @@ _DEFAULT_HOME = os.environ.get(
 class Settings(BaseSettings):
     home: str = _DEFAULT_HOME
     db_path: str = os.path.join(_DEFAULT_HOME, "logbook.db")
-    host: str = "0.0.0.0"
+    host: str = "127.0.0.1"
     port: int = 8000
     timezone: str = _system_timezone()
     project_dir: str = _DEFAULT_HOME

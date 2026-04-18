@@ -96,6 +96,6 @@ All env vars are prefixed `LOGBOOK_`. Key ones:
 
 - `LOGBOOK_HOME` — base directory for DB, .env, and project files (default `~/.logbook`). All other paths derive from this unless individually overridden.
 - `LOGBOOK_DB_PATH` — database file path (default `$LOGBOOK_HOME/logbook.db`)
-- `LOGBOOK_HOST`, `LOGBOOK_PORT` — server bind address (default `0.0.0.0:8000`)
+- `LOGBOOK_HOST`, `LOGBOOK_PORT` — server bind address (default `127.0.0.1:8000`)
 
 The CLI and MCP server use `LOGBOOK_URL` (default `http://localhost:8000`).
