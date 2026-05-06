@@ -23,7 +23,19 @@ function esc(str) {
   return el.innerHTML;
 }
 
-// Render long-form markdown text. marked escapes HTML in text by default.
+// Render long-form markdown text. Raw HTML in the source is escaped, not
+// passed through — marked v12 renders raw HTML by default, so we override.
+if (typeof marked !== "undefined") {
+  marked.use({
+    renderer: {
+      html(token) {
+        const text = typeof token === "string" ? token : (token.text ?? token.raw ?? "");
+        return esc(text);
+      },
+    },
+  });
+}
+
 function md(str) {
   if (!str) return "";
   if (typeof marked === "undefined") return esc(str).replace(/\n/g, "<br>");
