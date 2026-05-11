@@ -107,12 +107,18 @@ async def list_tasks(
     else:
         pname_cache = {}
     tags_map = await project_svc.get_tags_batch(db, "task", [t.id for t in tasks])
+    blockers_map = await svc.get_blockers_batch(db, [t.id for t in tasks])
     items = [
         TaskOut(
             id=t.id, project_id=t.project_id, project_name=pname_cache.get(t.project_id, "Unknown"),
             goal_id=t.goal_id,
             title=t.title, description=t.description, rationale=t.rationale,
             notes=t.notes, status=t.status, priority=t.priority, tags=tags_map.get(t.id, []),
+            blocked_by=[
+                TaskDepRef(id=b.id, title=b.title, status=b.status)
+                for b in blockers_map.get(t.id, [])
+            ],
+            is_blocked=any(b.status != "done" for b in blockers_map.get(t.id, [])),
             created_at=t.created_at, updated_at=t.updated_at, completed_at=t.completed_at,
         )
         for t in tasks
@@ -137,12 +143,18 @@ async def list_project_tasks(
     project = await db.get(Project, project_id)
     pname = project.name if project else "Unknown"
     tags_map = await project_svc.get_tags_batch(db, "task", [t.id for t in tasks])
+    blockers_map = await svc.get_blockers_batch(db, [t.id for t in tasks])
     items = [
         TaskOut(
             id=t.id, project_id=t.project_id, project_name=pname,
             goal_id=t.goal_id,
             title=t.title, description=t.description, rationale=t.rationale,
             notes=t.notes, status=t.status, priority=t.priority, tags=tags_map.get(t.id, []),
+            blocked_by=[
+                TaskDepRef(id=b.id, title=b.title, status=b.status)
+                for b in blockers_map.get(t.id, [])
+            ],
+            is_blocked=any(b.status != "done" for b in blockers_map.get(t.id, [])),
             created_at=t.created_at, updated_at=t.updated_at, completed_at=t.completed_at,
         )
         for t in tasks

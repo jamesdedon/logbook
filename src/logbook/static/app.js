@@ -366,7 +366,7 @@ async function toggleProjectDetail(card, projectId) {
 
   try {
     const [tasksData, logData] = await Promise.all([
-      api(`/tasks?project_id=${projectId}&status=todo,in_progress,done&limit=20`),
+      api(`/tasks?project_id=${projectId}&status=todo,in_progress,done&limit=500`),
       api(`/log?project_id=${projectId}&limit=10`),
     ]);
 
@@ -384,10 +384,15 @@ async function toggleProjectDetail(card, projectId) {
       html += `<div class="detail-section"><div class="detail-label">Tasks</div>`;
       for (const t of activeTasks) {
         const statusClass = t.status === "in_progress" ? "pill pill-active" : "pill pill-todo";
+        const activeBlockers = (t.blocked_by || []).filter((b) => b.status !== "done");
+        const blockedPill = t.is_blocked
+          ? `<span class="pill pill-blocked" title="blocked by: ${esc(activeBlockers.map((b) => b.title).join(", "))}">blocked</span>`
+          : "";
         html += `
-          <div class="task-row task-expandable">
+          <div class="task-row task-expandable${t.is_blocked ? " task-blocked" : ""}">
             <span class="pill pill-priority-${t.priority}">${esc(t.priority)}</span>
             <span class="task-title">${esc(t.title)}</span>
+            ${blockedPill}
             <span class="${statusClass}">${esc(t.status.replace("_", " "))}</span>
             <span class="task-toggle">&#9654;</span>
           </div>

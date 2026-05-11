@@ -167,6 +167,24 @@ async def get_task_blockers(db: AsyncSession, task_id: str) -> list[Task]:
     return list(result.scalars().all())
 
 
+async def get_blockers_batch(
+    db: AsyncSession, task_ids: list[str]
+) -> dict[str, list[Task]]:
+    """Return {blocked_id: [blocker_task, ...]} for the given task IDs."""
+    if not task_ids:
+        return {}
+    stmt = (
+        select(TaskDependency.blocked_id, Task)
+        .join(Task, Task.id == TaskDependency.blocker_id)
+        .where(TaskDependency.blocked_id.in_(task_ids))
+    )
+    result = await db.execute(stmt)
+    out: dict[str, list[Task]] = {}
+    for blocked_id, blocker in result.all():
+        out.setdefault(blocked_id, []).append(blocker)
+    return out
+
+
 async def get_task_blockees(db: AsyncSession, task_id: str) -> list[Task]:
     stmt = (
         select(Task)

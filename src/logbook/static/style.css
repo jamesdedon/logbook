@@ -806,6 +806,14 @@ main {
   margin-left: 0.5em;
 }
 
+.task-blocked .task-title {
+  color: var(--text-dim);
+}
+
+.task-blocked .pill-blocked {
+  cursor: help;
+}
+
 /* --- Collapsible task details --- */
 
 .task-toggle {
