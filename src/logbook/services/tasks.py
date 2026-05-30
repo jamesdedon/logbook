@@ -230,13 +230,16 @@ async def update_task(db: AsyncSession, task_id: str, **kwargs) -> Task | None:
     for key, value in kwargs.items():
         if value is not None:
             setattr(task, key, value)
-    # Stamp started_at the first time a task enters in_progress, completed_at on done.
-    if kwargs.get("status") == "in_progress" and not task.started_at:
-        task.started_at = datetime.now(timezone.utc).isoformat()
-    if kwargs.get("status") == "done" and not task.completed_at:
-        task.completed_at = datetime.now(timezone.utc).isoformat()
-    # Reverting out of done un-completes the task — clear the completion stamp.
-    if kwargs.get("status") and kwargs["status"] != "done":
+    now = datetime.now(timezone.utc).isoformat()
+    # Status/timestamp invariants, enforced on the *final* status (self-healing):
+    #   in_progress  => started_at is set (stamped on first entry, kept as history).
+    #   done         => completed_at is set; any other status clears it.
+    if task.status == "in_progress" and not task.started_at:
+        task.started_at = now
+    if task.status == "done":
+        if not task.completed_at:
+            task.completed_at = now
+    else:
         task.completed_at = None
     await db.commit()
     await db.refresh(task)

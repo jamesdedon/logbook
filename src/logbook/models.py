@@ -107,6 +107,11 @@ class Task(Base):
     __table_args__ = (
         CheckConstraint("status IN ('todo', 'in_progress', 'done', 'cancelled')", name="ck_task_status"),
         CheckConstraint("priority IN ('low', 'medium', 'high', 'critical')", name="ck_task_priority"),
+        # A task can't be in_progress without a started_at (other statuses are free).
+        CheckConstraint(
+            "status != 'in_progress' OR started_at IS NOT NULL",
+            name="ck_task_in_progress_started",
+        ),
         Index("idx_tasks_project", "project_id"),
         Index("idx_tasks_goal", "goal_id"),
         Index("idx_tasks_status", "status"),

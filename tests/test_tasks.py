@@ -22,6 +22,26 @@ async def test_create_task(client: AsyncClient, project_id: str):
 
 
 @pytest.mark.asyncio
+async def test_in_progress_stamps_started_at(client: AsyncClient, project_id: str):
+    r = await client.post(f"/projects/{project_id}/tasks", json={"title": "Start me"})
+    tid = r.json()["data"]["id"]
+    assert r.json()["data"]["started_at"] is None
+
+    # Moving to in_progress must stamp started_at (the invariant).
+    started = await client.patch(f"/tasks/{tid}", json={"status": "in_progress"})
+    s = started.json()["data"]
+    assert s["status"] == "in_progress"
+    assert s["started_at"] is not None
+
+    # Reverting to todo keeps started_at as history; completing keeps the stamp.
+    back = await client.patch(f"/tasks/{tid}", json={"status": "todo"})
+    assert back.json()["data"]["started_at"] == s["started_at"]
+    done = await client.patch(f"/tasks/{tid}", json={"status": "done"})
+    assert done.json()["data"]["started_at"] == s["started_at"]
+    assert done.json()["data"]["completed_at"] is not None
+
+
+@pytest.mark.asyncio
 async def test_task_dependencies(client: AsyncClient, project_id: str):
     # Create blocker task
     r1 = await client.post(f"/projects/{project_id}/tasks", json={"title": "Design schema"})
