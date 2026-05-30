@@ -1,6 +1,6 @@
 from datetime import datetime, timezone
 
-from sqlalchemy import CheckConstraint, ForeignKey, Index, String, Text, UniqueConstraint
+from sqlalchemy import CheckConstraint, ForeignKey, Index, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 from ulid import ULID
 
@@ -82,8 +82,14 @@ class Task(Base):
     notes: Mapped[str] = mapped_column(Text, default="")
     status: Mapped[str] = mapped_column(String, default="todo")
     priority: Mapped[str] = mapped_column(String, default="medium")
+    # `due` makes the task a scheduled commitment — the temporal "next" queue is
+    # dated tasks sorted by due. `estimate_minutes` is task size for calendar
+    # planning. Both nullable: undated tasks are backlog, ranked by priority.
+    due: Mapped[str | None] = mapped_column(String, nullable=True)
+    estimate_minutes: Mapped[int | None] = mapped_column(Integer, nullable=True)
     created_at: Mapped[str] = mapped_column(String, default=_now)
     updated_at: Mapped[str] = mapped_column(String, default=_now, onupdate=_now)
+    started_at: Mapped[str | None] = mapped_column(String, nullable=True)
     completed_at: Mapped[str | None] = mapped_column(String, nullable=True)
 
     project: Mapped["Project"] = relationship(back_populates="tasks")
@@ -105,6 +111,7 @@ class Task(Base):
         Index("idx_tasks_goal", "goal_id"),
         Index("idx_tasks_status", "status"),
         Index("idx_tasks_priority", "priority"),
+        Index("idx_tasks_due", "due"),
     )
 
 

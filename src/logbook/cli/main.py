@@ -323,11 +323,17 @@ def task_create(
     rationale: str = typer.Option("", "--rationale", "-r", help="Why is this task needed?"),
     notes: str = typer.Option("", "--notes", "-n", help="Additional context or findings"),
     priority: str = typer.Option("medium", "--priority"),
+    due: str = typer.Option(None, "--due", help="Due date YYYY-MM-DD (schedules the task into 'next')"),
+    estimate: int = typer.Option(None, "--estimate", help="Task size in minutes"),
     goal: str = typer.Option(None, "--goal", help="Goal ID"),
     blocked_by: str = typer.Option(None, "--blocked-by", help="Comma-separated blocker task IDs"),
     json_out: bool = typer.Option(False, "--json"),
 ):
     body = {"title": title, "description": desc, "rationale": rationale, "notes": notes, "priority": priority}
+    if due:
+        body["due"] = due
+    if estimate is not None:
+        body["estimate_minutes"] = estimate
     if goal:
         body["goal_id"] = goal
     if blocked_by:
@@ -365,6 +371,10 @@ def task_show(id: str = typer.Argument(...), json_out: bool = typer.Option(False
             _indent(f"[italic]Rationale:[/italic] {data['rationale']}")
         if data.get("notes"):
             _indent(f"[italic]Notes:[/italic] {data['notes']}")
+        if data.get("due"):
+            _indent(f"[italic]Due:[/italic] {data['due'][:10]}")
+        if data.get("estimate_minutes"):
+            _indent(f"[italic]Estimate:[/italic] {data['estimate_minutes']}m")
         if data.get("blocked_by"):
             _indent("[red]Blocked by:[/red]")
             for b in data["blocked_by"]:
@@ -506,8 +516,14 @@ def summary(json_out: bool = typer.Option(False, "--json")):
 
     if data.get("next_actions"):
         console.print()
-        console.print("[bold]Next up:[/bold]")
+        console.print("[bold]Scheduled:[/bold]")
         for n in data["next_actions"][:5]:
+            _indent(f"[{n['priority']}] {n['title']} ({n['project_name']}){_due_cli(n)}")
+
+    if data.get("backlog"):
+        console.print()
+        console.print("[bold]Backlog:[/bold]")
+        for n in data["backlog"][:5]:
             _indent(f"[{n['priority']}] {n['title']} ({n['project_name']})")
 
     if data.get("blocked_tasks"):
@@ -551,8 +567,27 @@ def today(json_out: bool = typer.Option(False, "--json")):
                 _indent(f"✓ {t['title']}", left=4)
 
 
+def _due_cli(t: dict) -> str:
+    """Rich-markup ' due 2026-06-03' / overdue suffix for a scheduled task dict."""
+    from datetime import date
+
+    due = (t.get("due") or "")[:10]
+    if not due:
+        return ""
+    bit = f"overdue {due}" if due < date.today().isoformat() else f"due {due}"
+    style = "red" if due < date.today().isoformat() else "dim"
+    est = t.get("estimate_minutes")
+    if est:
+        bit += f" · ~{est}m"
+    return f"  [{style}]{bit}[/{style}]"
+
+
+_PRIORITY_STYLES = {"critical": "red bold", "high": "red", "medium": "yellow", "low": "dim"}
+
+
 @app.command("next")
 def next_actions(json_out: bool = typer.Option(False, "--json")):
+    """The scheduled queue: dated tasks ordered by due date (soonest/overdue first)."""
     with _client() as c:
         resp = c.get("/summary/next")
         _handle_error(resp)
@@ -562,15 +597,45 @@ def next_actions(json_out: bool = typer.Option(False, "--json")):
         console.print_json(json.dumps(data))
         return
 
-    console.print("[bold]Next actions[/bold]")
+    console.print("[bold]Scheduled[/bold] (by due date)")
     if data.get("tasks"):
         for t in data["tasks"]:
-            pstyle = {"critical": "red bold", "high": "red", "medium": "yellow", "low": "dim"}.get(t["priority"], "")
+            pstyle = _PRIORITY_STYLES.get(t["priority"], "")
+            _indent(f"[{pstyle}]{t['priority']}[/{pstyle}] {t['title']} ({t['project_name']}){_due_cli(t)}")
+            if t.get("rationale"):
+                _indent(f"[dim]{t['rationale']}[/dim]", left=4)
+    else:
+        _indent("Nothing scheduled. Set a due date on a task, or run 'logbook backlog'.")
+
+
+@app.command("backlog")
+def backlog(
+    project: str = typer.Option(None, "--project", "-p", help="Filter by project ID"),
+    limit: int = typer.Option(10, "--limit", "-n", help="Max tasks to show"),
+    json_out: bool = typer.Option(False, "--json"),
+):
+    """The backlog: undated tasks ranked by priority (importance, not urgency)."""
+    params: dict = {"limit": limit}
+    if project:
+        params["project_id"] = project
+    with _client() as c:
+        resp = c.get("/summary/backlog", params=params)
+        _handle_error(resp)
+        data = resp.json()["data"]
+
+    if json_out:
+        console.print_json(json.dumps(data))
+        return
+
+    console.print("[bold]Backlog[/bold] (by priority)")
+    if data.get("tasks"):
+        for t in data["tasks"]:
+            pstyle = _PRIORITY_STYLES.get(t["priority"], "")
             _indent(f"[{pstyle}]{t['priority']}[/{pstyle}] {t['title']} ({t['project_name']})")
             if t.get("rationale"):
                 _indent(f"[dim]{t['rationale']}[/dim]", left=4)
     else:
-        _indent("Nothing queued up.")
+        _indent("Backlog is empty.")
 
 
 @app.command("weekly")

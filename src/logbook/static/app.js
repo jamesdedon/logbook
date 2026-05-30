@@ -47,6 +47,26 @@ function detailField(label, value) {
   return `<div class="task-detail-field"><div class="task-detail-label">${label}</div><div class="task-detail-body">${md(value)}</div></div>`;
 }
 
+// Always-shown "Dates" section for a full task object (TaskOut). Renders Created
+// for every task, Due ("—" until set), Completed when done, and Estimate if set.
+function datesSection(t) {
+  const fmt = (iso) => (iso ? `${shortDate(iso)} ${time(iso)}`.trim() : "");
+  const rows = [["Created", fmt(t.created_at) || "—"]];
+  if (t.started_at) rows.push(["Started", fmt(t.started_at)]);
+  let dueVal = "—";
+  if (t.due) {
+    const overdue = t.due.slice(0, 10) < new Date().toISOString().slice(0, 10);
+    dueVal = date(t.due) + (overdue ? " (overdue)" : "");
+  }
+  rows.push(["Due", dueVal]);
+  if (t.completed_at) rows.push(["Completed", fmt(t.completed_at)]);
+  if (t.estimate_minutes) rows.push(["Estimate", `${t.estimate_minutes} min`]);
+  const body = rows
+    .map(([k, v]) => `<div class="date-row"><span class="date-key">${esc(k)}</span><span class="date-val">${esc(v)}</span></div>`)
+    .join("");
+  return `<div class="task-detail-field"><div class="task-detail-label">Dates</div><div class="task-detail-body">${body}</div></div>`;
+}
+
 // Notes field that's always rendered (so label is visible when empty) and includes an inline editor.
 function notesField(taskId, value) {
   const body = value
@@ -227,6 +247,20 @@ function wireTaskToggles(container) {
 
 // --- Renderers ---
 
+// Compact due/estimate chip for a scheduled task ("due Jun 3 · ~90m", overdue styled).
+function schedChip(item) {
+  if (!item.due && !item.estimate_minutes) return "";
+  const bits = [];
+  let overdue = false;
+  if (item.due) {
+    const due = item.due.slice(0, 10);
+    overdue = due < new Date().toISOString().slice(0, 10);
+    bits.push(`${overdue ? "overdue" : "due"} ${shortDate(item.due)}`);
+  }
+  if (item.estimate_minutes) bits.push(`~${item.estimate_minutes}m`);
+  return `<span class="item-due${overdue ? " item-overdue" : ""}">${esc(bits.join(" · "))}</span>`;
+}
+
 function renderNextItems(items) {
   if (!items.length) {
     return `<p class="empty">No tasks match.</p>`;
@@ -241,6 +275,7 @@ function renderNextItems(items) {
             ${esc(n.project_name)}
             <span class="task-toggle">&#9654;</span>
           </span>
+          ${schedChip(n)}
           <span class="${priorityClass(n.priority)}">${esc(n.priority)}</span>
         </div>
         <div class="task-details collapsed">
@@ -284,15 +319,20 @@ function wireNextFilters(container) {
 
   const refresh = async () => {
     itemsEl.innerHTML = `<p class="loading">Loading...</p>`;
-    const showBlocked = projectSelect.value === "__blocked__";
-    limitSelect.disabled = showBlocked;
+    const view = projectSelect.value;
+    limitSelect.disabled = view === "__blocked__";
     try {
-      if (showBlocked) {
+      if (view === "__blocked__") {
         const data = await api(`/summary/blocked`);
         itemsEl.innerHTML = renderBlockedItems(data || []);
-      } else {
+      } else if (view === "__backlog__") {
         const params = new URLSearchParams({ limit: limitSelect.value });
-        if (projectSelect.value) params.set("project_id", projectSelect.value);
+        const data = await api(`/summary/backlog?${params.toString()}`);
+        itemsEl.innerHTML = renderNextItems(data?.tasks || []);
+      } else {
+        // Scheduled queue, optionally filtered to a project.
+        const params = new URLSearchParams({ limit: limitSelect.value });
+        if (view) params.set("project_id", view);
         const data = await api(`/summary/next?${params.toString()}`);
         itemsEl.innerHTML = renderNextItems(data?.tasks || []);
       }
@@ -400,6 +440,7 @@ async function toggleProjectDetail(card, projectId) {
             ${detailField("Description", t.description)}
             ${detailField("Rationale", t.rationale)}
             ${notesField(t.id, t.notes)}
+            ${datesSection(t)}
           </div>`;
       }
       html += `</div>`;
@@ -418,6 +459,7 @@ async function toggleProjectDetail(card, projectId) {
             ${detailField("Description", t.description)}
             ${detailField("Rationale", t.rationale)}
             ${notesField(t.id, t.notes)}
+            ${datesSection(t)}
           </div>`;
       }
       html += `</div>`;
@@ -518,13 +560,23 @@ function renderSummary(data, archivedProjects) {
     .map((p) => `<option value="${esc(p.id)}">${esc(p.name)}</option>`)
     .join("");
 
+  // "Next up" shows the scheduled (dated) queue. Default the view to Backlog when
+  // nothing is scheduled yet, so the rail is never empty; once dates exist, the
+  // scheduled queue takes over by default.
+  const scheduled = data.next_actions || [];
+  const backlog = data.backlog || [];
+  const showBacklog = scheduled.length === 0;
+  const schedSel = showBacklog ? "" : " selected";
+  const backlogSel = showBacklog ? " selected" : "";
+
   html += `<div class="section-title section-title-stack column-header" data-next-section>
     <span>Next up</span>
     <div class="section-controls">
       <label class="filter-label">
-        Project
-        <select class="next-project-select" aria-label="Filter by project">
-          <option value="">All</option>
+        View
+        <select class="next-project-select" aria-label="Filter view">
+          <option value=""${schedSel}>Scheduled</option>
+          <option value="__backlog__"${backlogSel}>Backlog</option>
           <option value="__blocked__">Blocked</option>
           ${projectOptions}
         </select>
@@ -541,7 +593,7 @@ function renderSummary(data, archivedProjects) {
     </div>
   </div>
   <div class="column-body">
-    <div class="next-items">${renderNextItems(data.next_actions || [])}</div>
+    <div class="next-items">${renderNextItems(showBacklog ? backlog : scheduled)}</div>
   </div>`;
 
   html += `</div></div>`;
@@ -793,7 +845,8 @@ function renderHelp() {
     <tr><td><code>logbook tasks</code></td><td>List active tasks (supports --project, --status, --priority, --blocked)</td></tr>
     <tr><td><code>logbook summary</code></td><td>Full overview of all projects</td></tr>
     <tr><td><code>logbook today</code></td><td>Today's activity</td></tr>
-    <tr><td><code>logbook next</code></td><td>What to work on next (ranked by priority, impact, age)</td></tr>
+    <tr><td><code>logbook next</code></td><td>Scheduled queue — dated tasks ordered by due date (soonest/overdue first)</td></tr>
+    <tr><td><code>logbook backlog</code></td><td>Backlog — undated tasks ranked by priority (supports --project, --limit)</td></tr>
     <tr><td><code>logbook blocked</code></td><td>Show blocked tasks and what's blocking them</td></tr>
     <tr><td><code>logbook weekly</code></td><td>Weekly report (supports -w for weeks back, -p for project)</td></tr>
     <tr><td><code>logbook search "keyword"</code></td><td>Search everything (supports --type to filter)</td></tr>
@@ -858,8 +911,8 @@ function renderHelp() {
     <dd>Timestamped records of work done. Can link to a project and task, and include git commit metadata.</dd>
   </dl>
 
-  <h2>Priorities &amp; next actions</h2>
-  <p>The <strong>next</strong> command ranks unblocked tasks by: priority first, then how many other tasks they unblock, then age. Everything it suggests is actionable right now.</p>
+  <h2>Scheduled vs backlog</h2>
+  <p>Tasks split into two queues by whether they have a <strong>due date</strong>. <strong>Scheduled</strong> (the "next" queue, and the default Next-up panel once anything is dated) is dated tasks ordered by due date — soonest and overdue first. "Next" is temporal, so only dated tasks appear. <strong>Backlog</strong> is undated tasks ranked by priority, then how many tasks they unblock, then age — importance, not urgency. Give a task a due date to move it from the backlog into the scheduled queue; add an estimate (minutes) to record its size.</p>
 
   <h2>Data &amp; backups</h2>
   <p>Everything lives in a single <code>logbook.db</code> file. No cloud, no sync. Use <code>logbook backup</code> to create a clean copy, or <code>logbook import-db</code> to restore one.</p>

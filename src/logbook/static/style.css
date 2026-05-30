@@ -1116,3 +1116,29 @@ mark {
   font-style: italic;
   padding: 16px 0;
 }
+
+/* Due/estimate chip on scheduled tasks in the Next-up rail */
+.item-due {
+  font-size: 0.72rem;
+  color: var(--text-dim);
+  white-space: nowrap;
+}
+.item-due.item-overdue {
+  color: var(--red);
+  font-weight: 600;
+}
+
+/* "Dates" section rows in task detail */
+.date-row {
+  display: flex;
+  gap: 10px;
+  font-size: 0.85rem;
+  line-height: 1.5;
+}
+.date-key {
+  color: var(--text-dim);
+  min-width: 72px;
+}
+.date-val {
+  color: var(--text);
+}

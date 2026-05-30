@@ -30,15 +30,44 @@ async def test_today(client: AsyncClient, project_id: str):
 
 
 @pytest.mark.asyncio
-async def test_next(client: AsyncClient, project_id: str):
+async def test_backlog_ranks_undated_by_priority(client: AsyncClient, project_id: str):
     await client.post(f"/projects/{project_id}/tasks", json={"title": "Do this", "priority": "critical"})
     await client.post(f"/projects/{project_id}/tasks", json={"title": "Then this", "priority": "low"})
 
-    resp = await client.get("/summary/next")
+    resp = await client.get("/summary/backlog")
     assert resp.status_code == 200
     tasks = resp.json()["data"]["tasks"]
     assert len(tasks) >= 2
     assert tasks[0]["priority"] == "critical"
+
+    # 'next' is temporal — undated tasks must not appear there.
+    nxt = await client.get("/summary/next")
+    assert nxt.json()["data"]["tasks"] == []
+
+
+@pytest.mark.asyncio
+async def test_next_is_dated_and_ordered_by_due(client: AsyncClient, project_id: str):
+    await client.post(
+        f"/projects/{project_id}/tasks",
+        json={"title": "Later", "priority": "critical", "due": "2026-06-10"},
+    )
+    await client.post(
+        f"/projects/{project_id}/tasks",
+        json={"title": "Sooner", "priority": "low", "due": "2026-06-01"},
+    )
+
+    resp = await client.get("/summary/next")
+    assert resp.status_code == 200
+    tasks = resp.json()["data"]["tasks"]
+    assert len(tasks) == 2
+    # Soonest due first, regardless of priority — 'next' is temporal, not importance.
+    assert tasks[0]["title"] == "Sooner"
+    assert tasks[0]["due"] == "2026-06-01"
+    assert tasks[1]["title"] == "Later"
+
+    # And dated tasks must not leak into the backlog.
+    backlog = await client.get("/summary/backlog")
+    assert backlog.json()["data"]["tasks"] == []
 
 
 @pytest.mark.asyncio

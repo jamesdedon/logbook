@@ -67,6 +67,7 @@ async def get_summary(db: AsyncSession = Depends(get_db)):
             for bt in data["blocked_tasks"]
         ],
         next_actions=[NextAction(**n) for n in data["next_actions"]],
+        backlog=[NextAction(**n) for n in data["backlog"]],
     ))
 
 
@@ -117,11 +118,27 @@ async def get_next(
     limit: int = 10,
     db: AsyncSession = Depends(get_db),
 ):
+    """The scheduled queue — dated tasks, soonest due first. 'Next' is temporal."""
     next_actions = await svc.get_next_actions(db, limit=limit, project_id=project_id)
     now = datetime.now(timezone.utc).isoformat()
     return ItemResponse(data=NextOut(
         generated_at=now,
         tasks=[NextAction(**n) for n in next_actions],
+    ))
+
+
+@router.get("/backlog", response_model=ItemResponse)
+async def get_backlog(
+    project_id: str | None = None,
+    limit: int = 10,
+    db: AsyncSession = Depends(get_db),
+):
+    """The backlog — undated tasks ranked by priority. Importance, not urgency."""
+    backlog = await svc.get_backlog(db, limit=limit, project_id=project_id)
+    now = datetime.now(timezone.utc).isoformat()
+    return ItemResponse(data=NextOut(
+        generated_at=now,
+        tasks=[NextAction(**n) for n in backlog],
     ))
 
 

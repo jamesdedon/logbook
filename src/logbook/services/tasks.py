@@ -15,6 +15,8 @@ async def create_task(
     rationale: str = "",
     notes: str = "",
     priority: str = "medium",
+    due: str | None = None,
+    estimate_minutes: int | None = None,
     goal_id: str | None = None,
     tags: list[str] | None = None,
     blocked_by: list[str] | None = None,
@@ -26,6 +28,8 @@ async def create_task(
         rationale=rationale,
         notes=notes,
         priority=priority,
+        due=due,
+        estimate_minutes=estimate_minutes,
         goal_id=goal_id,
     )
     db.add(task)
@@ -62,6 +66,8 @@ async def create_tasks_batch(
             rationale=item.get("rationale", ""),
             notes=item.get("notes", ""),
             priority=item.get("priority", "medium"),
+            due=item.get("due"),
+            estimate_minutes=item.get("estimate_minutes"),
             goal_id=item.get("goal_id"),
         )
         db.add(task)
@@ -224,8 +230,14 @@ async def update_task(db: AsyncSession, task_id: str, **kwargs) -> Task | None:
     for key, value in kwargs.items():
         if value is not None:
             setattr(task, key, value)
+    # Stamp started_at the first time a task enters in_progress, completed_at on done.
+    if kwargs.get("status") == "in_progress" and not task.started_at:
+        task.started_at = datetime.now(timezone.utc).isoformat()
     if kwargs.get("status") == "done" and not task.completed_at:
         task.completed_at = datetime.now(timezone.utc).isoformat()
+    # Reverting out of done un-completes the task — clear the completion stamp.
+    if kwargs.get("status") and kwargs["status"] != "done":
+        task.completed_at = None
     await db.commit()
     await db.refresh(task)
     return task

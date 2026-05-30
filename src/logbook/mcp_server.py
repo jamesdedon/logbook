@@ -36,6 +36,19 @@ def _to_local_time(iso_str: str) -> str:
     except (ValueError, TypeError):
         return iso_str[11:16] if len(iso_str) > 16 else ""
 
+
+def _sched_suffix(t: dict) -> str:
+    """Compact ' [OVERDUE 2026-06-03 · ~90m]' marker for a scheduled task dict."""
+    bits = []
+    due = (t.get("due") or "")[:10]
+    if due:
+        today = datetime.now(settings.tz).date().isoformat()
+        bits.append(f"OVERDUE {due}" if due < today else f"due {due}")
+    est = t.get("estimate_minutes")
+    if est:
+        bits.append(f"~{est}m")
+    return f"  [{' · '.join(bits)}]" if bits else ""
+
 mcp = FastMCP("logbook", instructions=(
     "Logbook is a local work journal and planning tool. Three core concepts:\n\n"
     "- **Tasks** (`logbook_task_*`) are intended/planned work items. They move "
@@ -50,10 +63,15 @@ mcp = FastMCP("logbook", instructions=(
     "- **Goals** (`logbook_goal_*`) are project-scoped milestones (e.g. 'Ship v1') "
     "that group related tasks. They have an optional target date and motivation. "
     "Attach a task to a goal via `goal_id` on create.\n\n"
-    "Priority (`low|medium|high|critical`) is metadata only. It is *not* used for "
-    "sorting except in the ranked next-action list returned by `logbook_next` / "
-    "`logbook_summary` (ordered by priority → unblocks-count → age). Treat "
-    "`critical` as 'most important', not 'fire right now'.\n\n"
+    "Tasks split into two queues by whether they have a `due` date. **Scheduled** "
+    "(`logbook_next`) is the temporal queue: dated tasks, soonest/overdue first — "
+    "'next' is a time concept, so only dated tasks appear. **Backlog** "
+    "(`logbook_backlog`) is undated tasks ranked by priority → unblocks-count → age — "
+    "importance, not urgency. `logbook_summary` shows both. Setting a `due` on a task "
+    "moves it from the backlog into the scheduled queue; `estimate_minutes` records "
+    "task size for planning. Priority (`low|medium|high|critical`) orders the backlog "
+    "and does not pull undated work into 'next'. Treat `critical` as 'most important', "
+    "not 'fire right now'.\n\n"
     "Typical session flow: call `logbook_summary` or `logbook_next` at start to "
     "pick up context, seed tasks with `logbook_tasks_create` (batch) when planning "
     "new work, and call `logbook_log` after each commit or meaningful deliverable."
@@ -105,8 +123,14 @@ def logbook_summary() -> str:
         if p.get("motivation"):
             lines.append(_wrap(f"Motivation: {p['motivation']}"))
     if data.get("next_actions"):
-        lines.append("\nNext up:")
+        lines.append("\nScheduled (by due date):")
         for n in data["next_actions"]:
+            lines.append(_wrap(f"[{n['priority']}] {n['title']} (project: {n['project_name']}, id: {n['id']}){_sched_suffix(n)}"))
+            if n.get("rationale"):
+                lines.append(_wrap(f"Why: {n['rationale']}", indent="    "))
+    if data.get("backlog"):
+        lines.append("\nBacklog (by priority):")
+        for n in data["backlog"]:
             lines.append(_wrap(f"[{n['priority']}] {n['title']} (project: {n['project_name']}, id: {n['id']})"))
             if n.get("rationale"):
                 lines.append(_wrap(f"Why: {n['rationale']}", indent="    "))
@@ -188,11 +212,40 @@ def logbook_today() -> str:
 
 @mcp.tool()
 def logbook_next() -> str:
-    """Get the next recommended actions, sorted by priority and impact."""
+    """Get the scheduled queue: dated tasks ordered by due date (soonest/overdue first).
+
+    'Next' is temporal — only tasks with a due date appear here. For importance-ranked
+    undated work, use logbook_backlog.
+    """
     data = _get("/summary/next")["data"]
     if not data.get("tasks"):
-        return "Nothing queued up."
-    lines = ["Next actions:"]
+        return "Nothing scheduled. Set a due date on a task to queue it here, or see logbook_backlog."
+    lines = ["Scheduled (by due date):"]
+    for t in data["tasks"]:
+        lines.append(_wrap(f"[{t['priority']}] {t['title']} (project: {t['project_name']}, id: {t['id']}){_sched_suffix(t)}"))
+        if t.get("rationale"):
+            lines.append(_wrap(f"Why: {t['rationale']}", indent="    "))
+    return "\n".join(lines)
+
+
+@mcp.tool()
+def logbook_backlog(project_id: str | None = None, limit: int = 10) -> str:
+    """List the backlog: undated tasks ranked by priority (importance, not urgency).
+
+    These are what to pull from when you have free time and nothing is due. To schedule
+    one, set a due date via logbook_task_update.
+
+    Args:
+        project_id: Optional project ID to filter by
+        limit: Max tasks to return (default 10)
+    """
+    params: dict = {"limit": limit}
+    if project_id:
+        params["project_id"] = project_id
+    data = _get("/summary/backlog", params)["data"]
+    if not data.get("tasks"):
+        return "Backlog is empty."
+    lines = ["Backlog (by priority):"]
     for t in data["tasks"]:
         lines.append(_wrap(f"[{t['priority']}] {t['title']} (project: {t['project_name']}, id: {t['id']})"))
         if t.get("rationale"):
@@ -512,6 +565,8 @@ def logbook_task_create(
     rationale: str = "",
     notes: str = "",
     priority: Priority = "medium",
+    due: str | None = None,
+    estimate_minutes: int | None = None,
     goal_id: str | None = None,
     blocked_by: list[str] | None = None,
 ) -> str:
@@ -524,10 +579,17 @@ def logbook_task_create(
         rationale: Why is this task needed? What triggered it?
         notes: Additional context, findings, or running commentary on this task
         priority: Priority level (low, medium, high, critical)
+        due: Optional due date (YYYY-MM-DD). Setting this schedules the task — it
+            moves from the priority backlog into the temporal 'next' queue.
+        estimate_minutes: Optional task size in minutes, for planning/time-blocking
         goal_id: Optional goal ID to link this task to
         blocked_by: Optional list of task IDs that block this task
     """
     body: dict = {"title": title, "description": description, "rationale": rationale, "notes": notes, "priority": priority}
+    if due:
+        body["due"] = due
+    if estimate_minutes is not None:
+        body["estimate_minutes"] = estimate_minutes
     if goal_id:
         body["goal_id"] = goal_id
     if blocked_by:
@@ -551,7 +613,8 @@ def logbook_tasks_create(project_id: str, tasks: list[dict]) -> str:
     Args:
         project_id: Project ID all tasks in the batch belong to
         tasks: List of task dicts. Each supports the same fields as logbook_task_create:
-            title (required), description, rationale, notes, priority, goal_id, blocked_by.
+            title (required), description, rationale, notes, priority, due,
+            estimate_minutes, goal_id, blocked_by.
             blocked_by references must point to task IDs that already exist — batch-internal
             blocker references (naming a sibling task in the same batch) are not supported.
     """
@@ -578,8 +641,10 @@ def logbook_task_update(
     rationale: str | None = None,
     notes: str | None = None,
     priority: Priority | None = None,
+    due: str | None = None,
+    estimate_minutes: int | None = None,
 ) -> str:
-    """Update a task's status, title, description, rationale, notes, or priority. Use status='done' to complete a task.
+    """Update a task's status, title, description, rationale, notes, priority, due date, or estimate. Use status='done' to complete a task.
 
     Args:
         task_id: The task ID to update
@@ -589,6 +654,8 @@ def logbook_task_update(
         rationale: New rationale (why this task is needed / what triggered it)
         notes: Additional context, findings, or running commentary on this task
         priority: New priority (low, medium, high, critical)
+        due: Due date (YYYY-MM-DD) — schedules the task into the temporal 'next' queue
+        estimate_minutes: Task size in minutes, for planning/time-blocking
     """
     body = {}
     if status:
@@ -603,6 +670,10 @@ def logbook_task_update(
         body["notes"] = notes
     if priority:
         body["priority"] = priority
+    if due is not None:
+        body["due"] = due
+    if estimate_minutes is not None:
+        body["estimate_minutes"] = estimate_minutes
 
     data = _patch(f"/tasks/{task_id}", body)["data"]
     return "Updated task.\n" + _format_task(data)
@@ -619,6 +690,11 @@ def _format_task(data: dict) -> str:
         lines.append(_wrap(f"Rationale: {data['rationale']}"))
     if data.get("notes"):
         lines.append(_wrap(f"Notes: {data['notes']}"))
+    sched = _sched_suffix(data).strip()
+    if sched:
+        lines.append(_wrap(sched.strip("[]")))
+    if data.get("started_at"):
+        lines.append(_wrap(f"Started: {data['started_at'][:10]}"))
     if data.get("is_blocked"):
         lines.append("  STATUS: BLOCKED")
     if data.get("blocked_by"):

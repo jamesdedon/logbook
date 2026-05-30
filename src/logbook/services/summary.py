@@ -75,14 +75,16 @@ async def get_summary(db: AsyncSession) -> dict:
     # Blocked tasks (reuse get_blocked_tasks which returns dicts with blocked_by info)
     blocked_tasks = await get_blocked_tasks(db)
 
-    # Next actions
+    # Scheduled (dated) queue + the priority backlog (undated)
     next_tasks = await get_next_actions(db)
+    backlog_tasks = await get_backlog(db)
 
     return {
         "active_projects": active_projects,
         "recent_activity": recent_activity,
         "blocked_tasks": blocked_tasks,
         "next_actions": next_tasks,
+        "backlog": backlog_tasks,
     }
 
 
@@ -107,10 +109,17 @@ async def get_today(db: AsyncSession) -> dict:
     return {"log_entries": log_entries, "tasks_completed": tasks_completed}
 
 
-async def get_next_actions(
-    db: AsyncSession, limit: int = 10, project_id: str | None = None
+async def _ranked_actions(
+    db: AsyncSession, *, scheduled: bool, limit: int, project_id: str | None
 ) -> list[dict]:
-    # Unblocked todo/in_progress tasks, ordered by priority then unblocks-count then age
+    """Unblocked todo/in_progress tasks, split into two temporal classes.
+
+    `scheduled=True`  -> the "next" queue: dated tasks (due IS NOT NULL), ordered
+                          by due ascending (overdue first), then priority/unblocks/age.
+                          "Next" is a temporal concept — without a date it isn't next.
+    `scheduled=False` -> the backlog: undated tasks (due IS NULL), ranked by
+                          priority then unblocks then age. Importance, not urgency.
+    """
     blocked_subq = (
         select(TaskDependency.blocked_id)
         .join(Task, Task.id == TaskDependency.blocker_id)
@@ -140,10 +149,19 @@ async def get_next_actions(
         .where(
             Task.status.in_(["todo", "in_progress"]),
             Task.id.notin_(blocked_subq),
+            Task.due.isnot(None) if scheduled else Task.due.is_(None),
         )
-        .order_by(priority_order, literal_column("unblocks").desc(), Task.created_at.asc())
-        .limit(limit)
     )
+    if scheduled:
+        # Temporal order: soonest due (and overdue) first.
+        stmt = stmt.order_by(
+            Task.due.asc(), priority_order, literal_column("unblocks").desc(), Task.created_at.asc()
+        )
+    else:
+        stmt = stmt.order_by(
+            priority_order, literal_column("unblocks").desc(), Task.created_at.asc()
+        )
+    stmt = stmt.limit(limit)
     if project_id is not None:
         stmt = stmt.where(Task.project_id == project_id)
 
@@ -170,11 +188,27 @@ async def get_next_actions(
             "rationale": t.rationale or "",
             "notes": t.notes or "",
             "priority": t.priority,
+            "due": t.due,
+            "estimate_minutes": t.estimate_minutes,
             "project_id": t.project_id,
             "project_name": pname_map.get(t.project_id, "unknown"),
         }
         for t in tasks
     ]
+
+
+async def get_next_actions(
+    db: AsyncSession, limit: int = 10, project_id: str | None = None
+) -> list[dict]:
+    """The scheduled queue: dated tasks, soonest due first. See _ranked_actions."""
+    return await _ranked_actions(db, scheduled=True, limit=limit, project_id=project_id)
+
+
+async def get_backlog(
+    db: AsyncSession, limit: int = 10, project_id: str | None = None
+) -> list[dict]:
+    """The backlog: undated tasks ranked by priority. See _ranked_actions."""
+    return await _ranked_actions(db, scheduled=False, limit=limit, project_id=project_id)
 
 
 async def get_weekly_report(db: AsyncSession, weeks_back: int = 0, project_id: str | None = None) -> dict:

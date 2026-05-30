@@ -105,6 +105,8 @@ class TaskCreate(BaseModel):
     rationale: str = ""
     notes: str = ""
     priority: str = "medium"
+    due: str | None = None
+    estimate_minutes: int | None = None
     goal_id: str | None = None
     tags: list[str] = []
     blocked_by: list[str] = []
@@ -121,6 +123,8 @@ class TaskUpdate(BaseModel):
     notes: str | None = None
     status: str | None = None
     priority: str | None = None
+    due: str | None = None
+    estimate_minutes: int | None = None
     goal_id: str | None = None
 
 
@@ -147,6 +151,8 @@ class TaskOut(BaseModel):
     notes: str = ""
     status: str
     priority: str
+    due: str | None = None
+    estimate_minutes: int | None = None
     tags: list[str] = []
     blocked_by: list[TaskDepRef] = []
     blocks: list[TaskDepRef] = []
@@ -154,6 +160,7 @@ class TaskOut(BaseModel):
     recent_log_entries: list[LogEntryBrief] = []
     created_at: str
     updated_at: str
+    started_at: str | None = None
     completed_at: str | None
 
 
@@ -234,6 +241,8 @@ class NextAction(BaseModel):
     rationale: str = ""
     notes: str = ""
     priority: str
+    due: str | None = None
+    estimate_minutes: int | None = None
     project_id: str
     project_name: str
 
@@ -243,7 +252,8 @@ class SummaryOut(BaseModel):
     active_projects: list[ProjectSummary]
     recent_activity: list[WorkLogOut]
     blocked_tasks: list[BlockedTaskOut]
-    next_actions: list[NextAction]
+    next_actions: list[NextAction]  # scheduled: dated tasks, soonest due first
+    backlog: list[NextAction] = []  # undated tasks, ranked by priority
 
 
 class TodayOut(BaseModel):
