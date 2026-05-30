@@ -243,6 +243,9 @@ class NextAction(BaseModel):
     priority: str
     due: str | None = None
     estimate_minutes: int | None = None
+    created_at: str = ""
+    started_at: str | None = None
+    completed_at: str | None = None
     project_id: str
     project_name: str
 

@@ -190,6 +190,9 @@ async def _ranked_actions(
             "priority": t.priority,
             "due": t.due,
             "estimate_minutes": t.estimate_minutes,
+            "created_at": t.created_at,
+            "started_at": t.started_at,
+            "completed_at": t.completed_at,
             "project_id": t.project_id,
             "project_name": pname_map.get(t.project_id, "unknown"),
         }

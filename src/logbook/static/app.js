@@ -282,6 +282,7 @@ function renderNextItems(items) {
           ${detailField("Description", n.description)}
           ${detailField("Rationale", n.rationale)}
           ${notesField(n.id, n.notes)}
+          ${datesSection(n)}
         </div>
       </div>`;
   }
