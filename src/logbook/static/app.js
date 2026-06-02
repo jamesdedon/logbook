@@ -1176,12 +1176,13 @@ $("#theme-toggle").addEventListener("click", () => {
 
 // --- Background image picker ---
 
-const BG_KEY = "logbook-bg-image";
+// Pre-server-persistence versions stored the image here; migrated on load.
+const LEGACY_BG_KEY = "logbook-bg-image";
 
-function applyBackground(dataUrl) {
+function applyBackground(imageUrl) {
   const clearBtn = $("#bg-clear");
-  if (dataUrl) {
-    document.body.style.setProperty("--bg-image", `url("${dataUrl}")`);
+  if (imageUrl) {
+    document.body.style.setProperty("--bg-image", `url("${imageUrl}")`);
     clearBtn.hidden = false;
   } else {
     document.body.style.removeProperty("--bg-image");
@@ -1189,33 +1190,70 @@ function applyBackground(dataUrl) {
   }
 }
 
-applyBackground(localStorage.getItem(BG_KEY));
+async function uploadBackground(blob) {
+  const resp = await fetch("/background", {
+    method: "PUT",
+    headers: { "Content-Type": blob.type || "application/octet-stream" },
+    body: blob,
+  });
+  if (!resp.ok) {
+    let detail = `${resp.status} ${resp.statusText}`;
+    try {
+      detail = (await resp.json()).detail || detail;
+    } catch { /* response body wasn't JSON */ }
+    throw new Error(detail);
+  }
+}
+
+async function loadBackground() {
+  try {
+    const resp = await fetch("/background");
+    if (resp.ok) {
+      applyBackground(URL.createObjectURL(await resp.blob()));
+      localStorage.removeItem(LEGACY_BG_KEY);
+      return;
+    }
+  } catch { /* server unreachable */
+    return;
+  }
+
+  // No server-side background — migrate one saved by the old localStorage version
+  const legacy = localStorage.getItem(LEGACY_BG_KEY);
+  if (!legacy) return;
+  try {
+    const blob = await (await fetch(legacy)).blob();
+    await uploadBackground(blob);
+    localStorage.removeItem(LEGACY_BG_KEY);
+    applyBackground(URL.createObjectURL(blob));
+  } catch { /* keep the legacy value and retry on next load */ }
+}
+
+loadBackground();
 
 $("#bg-choose").addEventListener("click", () => $("#bg-file").click());
 
-$("#bg-file").addEventListener("change", (ev) => {
+$("#bg-file").addEventListener("change", async (ev) => {
   const file = ev.target.files?.[0];
+  ev.target.value = "";
   if (!file) return;
   if (!/^image\/(jpeg|png)$/.test(file.type)) {
     alert("Please choose a JPG or PNG image.");
     return;
   }
-  const reader = new FileReader();
-  reader.onload = () => {
-    try {
-      localStorage.setItem(BG_KEY, reader.result);
-      applyBackground(reader.result);
-    } catch (err) {
-      alert(`Could not save background: ${err.message} — try a smaller image.`);
-    }
-  };
-  reader.readAsDataURL(file);
-  ev.target.value = "";
+  try {
+    await uploadBackground(file);
+    applyBackground(URL.createObjectURL(file));
+  } catch (err) {
+    alert(`Could not save background: ${err.message}`);
+  }
 });
 
-$("#bg-clear").addEventListener("click", () => {
-  localStorage.removeItem(BG_KEY);
+$("#bg-clear").addEventListener("click", async () => {
   applyBackground(null);
+  localStorage.removeItem(LEGACY_BG_KEY);
+  try {
+    await fetch("/background", { method: "DELETE" });
+  } catch { /* server unreachable; cleared locally */ }
 });
 
 // --- Init ---

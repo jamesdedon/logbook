@@ -5,7 +5,7 @@ from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 from setproctitle import setproctitle
 
-from logbook.routers import goals, projects, search, summary, tasks, worklog
+from logbook.routers import background, goals, projects, search, summary, tasks, worklog
 
 STATIC_DIR = Path(__file__).parent / "static"
 
@@ -24,6 +24,7 @@ app.include_router(tasks.router)
 app.include_router(worklog.router)
 app.include_router(summary.router)
 app.include_router(search.router)
+app.include_router(background.router)
 
 
 app.mount("/ui", StaticFiles(directory=STATIC_DIR, html=True), name="ui")
