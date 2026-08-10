@@ -235,6 +235,7 @@ main {
 }
 
 .summary-layout,
+.project-layout,
 .tab-panel {
   background: var(--panel-bg);
   border: 1px solid var(--border);
@@ -336,11 +337,162 @@ main {
   margin-bottom: 0;
 }
 
+/* --- Project tab --- */
+
+.project-layout {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  height: calc(100vh - 100px);
+}
+
+.project-overview {
+  flex-shrink: 0;
+}
+
+.project-overview-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.project-select {
+  font-size: 15px;
+  font-weight: 600;
+  padding: 4px 8px;
+  max-width: 320px;
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+}
+
+.project-select:hover {
+  border-color: var(--accent);
+}
+
+.project-pills {
+  flex: 1;
+}
+
+.project-about-toggle {
+  margin-top: 0;
+  margin-left: auto;
+}
+
+.project-about {
+  padding-left: 0;
+  margin-top: 4px;
+}
+
+/* Single-line column header: section title on the left, its selects on the
+   right. Overrides the stacked .column-header sizing used on Summary. */
+.column-header-row {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  min-height: 0;
+  padding-bottom: 10px;
+}
+
+.column-header-row .section-controls {
+  gap: 12px;
+}
+
+.project-columns {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 32px;
+}
+
+.project-col {
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Work-log entries get the same card frame as the task cards opposite them.
+   Green left stripe rather than a priority colour — a log is work already done. */
+.project-logs .timeline-entry {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-left: 4px solid var(--green);
+  border-radius: 6px;
+  padding: 10px 12px;
+  margin-bottom: 8px;
+}
+
+.project-logs .timeline-entry:last-child {
+  margin-bottom: 0;
+  border-bottom: 1px solid var(--border);
+}
+
+/* A multi-commit chip is far too long to hold on one line in a half-width
+   column, so let it wrap here (it stays nowrap on the wide Today/Weekly views). */
+.project-logs .commit-info {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+/* Neither column may widen the page: long titles, paths and identifiers wrap. */
+.project-tasks .item-title,
+.project-tasks .task-detail-body,
+.project-about .task-detail-body {
+  overflow-wrap: anywhere;
+}
+
+.project-col .column-body {
+  overflow-x: hidden;
+}
+
+.task-group {
+  margin-bottom: 18px;
+}
+
+.task-group:last-child {
+  margin-bottom: 0;
+}
+
+.group-count {
+  font-weight: 500;
+  color: var(--text-dim);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 0 6px;
+  margin-left: 4px;
+}
+
+.item-card-done .item-title {
+  color: var(--text-dim);
+  font-weight: 400;
+}
+
+.pill-goal {
+  background: var(--bg);
+  color: var(--text-dim);
+  border: 1px solid var(--border);
+}
+
 @media (max-width: 900px) {
   .summary-layout {
     grid-template-columns: 1fr;
     gap: 0;
     height: auto;
+  }
+  .project-layout {
+    height: auto;
+  }
+  .project-columns {
+    grid-template-columns: 1fr;
+    gap: 24px;
   }
   .column-body {
     overflow-y: visible;
@@ -609,7 +761,10 @@ main {
 
 .timeline-entry {
   display: grid;
-  grid-template-columns: auto 1fr;
+  /* minmax(0, 1fr), not 1fr: a 1fr track's automatic minimum is its widest
+     unbreakable token, so long URLs / inline code widen the column instead of
+     wrapping. Flooring the minimum at 0 keeps the layout horizontally stable. */
+  grid-template-columns: auto minmax(0, 1fr);
   gap: 12px;
   padding: 8px 0;
   border-bottom: 1px solid var(--border);
@@ -633,6 +788,10 @@ main {
 
 .timeline-desc {
   font-size: 14px;
+  min-width: 0;
+  /* "anywhere" rather than "break-word" — only anywhere shrinks the intrinsic
+     min-content width, which is what a grid/flex track measures. */
+  overflow-wrap: anywhere;
 }
 
 .timeline-body > *:first-child { margin-top: 0; }
@@ -655,6 +814,8 @@ main {
   border-radius: 4px;
   overflow-x: auto;
   margin: 4px 0;
+  /* Code blocks scroll inside their own box instead of stretching the column. */
+  max-width: 100%;
 }
 .timeline-body pre code { background: none; padding: 0; }
 .timeline-body a { color: var(--accent); }

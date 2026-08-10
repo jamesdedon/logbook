@@ -5,6 +5,8 @@ const content = $("#content");
 let currentTab = "summary";
 let weeksBack = 0;
 let includeArchived = false;
+// Project tab remembers its selection across reloads.
+let currentProjectId = localStorage.getItem("logbook-project-id") || "";
 
 // --- API ---
 
@@ -661,6 +663,324 @@ function renderSummary(data, archivedProjects) {
   }
 }
 
+// --- Project tab ---
+//
+// One project at a time, with room to work: an overview pill up top (project
+// selector + counts + expandable about), then two full-height columns —
+// tasks on the left, work log on the right.
+
+const PRIORITY_RANK = { critical: 0, high: 1, medium: 2, low: 3 };
+
+const TASK_STATUS_GROUPS = [
+  ["in_progress", "In progress"],
+  ["todo", "To do"],
+  ["done", "Completed"],
+  ["cancelled", "Cancelled"],
+];
+
+// All of the project's tasks, fetched once per project. Filtering and sorting
+// happen client-side so the selects are instant.
+let projectTasks = [];
+let projectTaskFilter = "active";
+let projectTaskSort = "priority";
+let projectLogLimit = "20";
+
+function isActivelyBlocked(t) {
+  return t.is_blocked && t.status !== "done" && t.status !== "cancelled";
+}
+
+function taskMatchesFilter(t) {
+  switch (projectTaskFilter) {
+    case "active": return t.status === "todo" || t.status === "in_progress";
+    case "blocked": return isActivelyBlocked(t);
+    case "all": return true;
+    default: return t.status === projectTaskFilter;
+  }
+}
+
+function sortProjectTasks(tasks) {
+  const byPriority = (a, b) => (PRIORITY_RANK[a.priority] ?? 9) - (PRIORITY_RANK[b.priority] ?? 9);
+  // dir: 1 ascending, -1 descending. Undated tasks sink to the bottom in BOTH
+  // directions — "no due date" isn't a far-future date, so flipping the sort
+  // shouldn't float undated work to the top.
+  const byDue = (dir) => (a, b) => {
+    if (!a.due && !b.due) return 0;
+    if (!a.due) return 1;
+    if (!b.due) return -1;
+    if (a.due === b.due) return 0;
+    return (a.due < b.due ? -1 : 1) * dir;
+  };
+  const byCreated = (dir) => (a, b) => {
+    if (a.created_at === b.created_at) return 0;
+    return (a.created_at < b.created_at ? -1 : 1) * dir;
+  };
+  const newestFirst = byCreated(-1);
+  const cmp = {
+    priority: (a, b) => byPriority(a, b) || byDue(1)(a, b) || newestFirst(a, b),
+    due_asc: (a, b) => byDue(1)(a, b) || byPriority(a, b) || newestFirst(a, b),
+    due_desc: (a, b) => byDue(-1)(a, b) || byPriority(a, b) || newestFirst(a, b),
+    created_desc: newestFirst,
+    created_asc: byCreated(1),
+  }[projectTaskSort] || newestFirst;
+  return [...tasks].sort(cmp);
+}
+
+function projectTaskCard(t) {
+  const activeBlockers = (t.blocked_by || []).filter((b) => b.status !== "done");
+  const blockedPill = isActivelyBlocked(t)
+    ? `<span class="pill pill-blocked" title="blocked by: ${esc(activeBlockers.map((b) => b.title).join(", "))}">blocked</span>`
+    : "";
+  const closed = t.status === "done" || t.status === "cancelled";
+  const closedDate = t.completed_at ? `<span class="item-due">${esc(shortDate(t.completed_at))}</span>` : "";
+  return `
+    <div class="item item-card item-expandable item-priority-${esc(t.priority)}${closed ? " item-card-done" : ""}">
+      <div class="item-title">${closed ? '<span class="check">&#10003;</span> ' : ""}${esc(t.title)}</div>
+      <div class="item-meta item-meta-block item-meta-row">
+        <span class="item-project">
+          ${blockedPill}
+          <span class="task-toggle">&#9654;</span>
+        </span>
+        ${closed ? closedDate : schedChip(t)}
+        <span class="${priorityClass(t.priority)}">${esc(t.priority)}</span>
+      </div>
+      <div class="task-details collapsed">
+        ${detailField("Description", t.description)}
+        ${detailField("Rationale", t.rationale)}
+        ${notesField(t.id, t.notes)}
+        ${activeBlockers.length ? detailField("Blocked by", activeBlockers.map((b) => `${b.title} (${b.status})`).join(", ")) : ""}
+        ${datesSection(t)}
+      </div>
+    </div>`;
+}
+
+function renderProjectTasks() {
+  const el = $(".project-tasks");
+  if (!el) return;
+  const visible = projectTasks.filter(taskMatchesFilter);
+  if (!visible.length) {
+    el.innerHTML = `<p class="empty">No tasks match this filter.</p>`;
+    return;
+  }
+  let html = "";
+  for (const [status, label] of TASK_STATUS_GROUPS) {
+    const group = visible.filter((t) => t.status === status);
+    if (!group.length) continue;
+    // Ranking finished work by priority is meaningless, so the default sort
+    // falls back to most-recently-completed. An explicit date sort is honoured.
+    const closed = status === "done" || status === "cancelled";
+    const ordered = closed && projectTaskSort === "priority"
+      ? [...group].sort((a, b) => ((a.completed_at || "") < (b.completed_at || "") ? 1 : -1))
+      : sortProjectTasks(group);
+    html += `<div class="task-group">
+      <div class="detail-label">${esc(label)} <span class="group-count">${ordered.length}</span></div>
+      ${ordered.map(projectTaskCard).join("")}
+    </div>`;
+  }
+  el.innerHTML = html;
+  wireTaskToggles(el);
+  wireNotesEditors(el);
+}
+
+function renderProjectLogs(logs) {
+  const el = $(".project-logs");
+  if (!el) return;
+  el.innerHTML = logs.length ? renderLogEntries(logs) : `<p class="empty">No log entries.</p>`;
+}
+
+function renderProjectOverview(project, goals) {
+  const pillsEl = $(".project-pills");
+  const aboutEl = $(".project-about");
+  if (!pillsEl || !aboutEl) return;
+
+  const c = project.counts || {};
+  const blocked = projectTasks.filter(isActivelyBlocked).length;
+  pillsEl.innerHTML = [
+    c.tasks_todo ? `<span class="pill pill-todo">${c.tasks_todo} todo</span>` : "",
+    c.tasks_in_progress ? `<span class="pill pill-active">${c.tasks_in_progress} active</span>` : "",
+    c.tasks_done ? `<span class="pill pill-done">${c.tasks_done} done</span>` : "",
+    blocked ? `<span class="pill pill-blocked">${blocked} blocked</span>` : "",
+    c.goals ? `<span class="pill pill-goal">${c.goals} goals</span>` : "",
+    project.status === "archived" ? `<span class="pill pill-archived">archived</span>` : "",
+  ].join("");
+
+  const activeGoals = (goals || []).filter((g) => g.status === "active");
+  const goalRows = activeGoals
+    .map((g) => `<div class="date-row"><span class="date-val">${esc(g.title)}</span>${g.target_date ? `<span class="date-key">${esc(date(g.target_date))}</span>` : ""}</div>`)
+    .join("");
+  const meta = [
+    `<div class="date-row"><span class="date-key">Created</span><span class="date-val">${esc(shortDate(project.created_at))}</span></div>`,
+    `<div class="date-row"><span class="date-key">Updated</span><span class="date-val">${esc(shortDate(project.updated_at))}</span></div>`,
+    project.tags?.length ? `<div class="date-row"><span class="date-key">Tags</span><span class="date-val">${esc(project.tags.join(", "))}</span></div>` : "",
+  ].join("");
+
+  aboutEl.innerHTML = `
+    ${detailField("Description", project.description)}
+    ${detailField("Motivation", project.motivation)}
+    ${goalRows ? `<div class="task-detail-field"><div class="task-detail-label">Goals</div><div class="task-detail-body">${goalRows}</div></div>` : ""}
+    <div class="task-detail-field"><div class="task-detail-label">Details</div><div class="task-detail-body">${meta}</div></div>`;
+}
+
+async function loadProjectData(projectId) {
+  const tasksEl = $(".project-tasks");
+  const logsEl = $(".project-logs");
+  tasksEl.innerHTML = `<p class="loading">Loading...</p>`;
+  logsEl.innerHTML = `<p class="loading">Loading...</p>`;
+  const pid = encodeURIComponent(projectId);
+  try {
+    const [project, tasks, logs, goals] = await Promise.all([
+      api(`/projects/${pid}`),
+      api(`/tasks?project_id=${pid}&status=todo,in_progress,done,cancelled&limit=500`),
+      api(`/log?project_id=${pid}&limit=${projectLogLimit}`),
+      api(`/projects/${pid}/goals`),
+    ]);
+    projectTasks = Array.isArray(tasks) ? tasks : [];
+    renderProjectOverview(project, Array.isArray(goals) ? goals : []);
+    renderProjectTasks();
+    renderProjectLogs(Array.isArray(logs) ? logs : []);
+  } catch (err) {
+    tasksEl.innerHTML = `<p class="error">Failed to load: ${esc(err.message)}</p>`;
+    logsEl.innerHTML = "";
+  }
+}
+
+async function reloadProjectLogs() {
+  const logsEl = $(".project-logs");
+  if (!logsEl) return;
+  logsEl.innerHTML = `<p class="loading">Loading...</p>`;
+  try {
+    const logs = await api(`/log?project_id=${encodeURIComponent(currentProjectId)}&limit=${projectLogLimit}`);
+    renderProjectLogs(Array.isArray(logs) ? logs : []);
+  } catch (err) {
+    logsEl.innerHTML = `<p class="error">Failed to load: ${esc(err.message)}</p>`;
+  }
+}
+
+function renderProjectShell(projects, selectedId) {
+  const active = projects.filter((p) => p.status !== "archived");
+  const archived = projects.filter((p) => p.status === "archived");
+  const opt = (p) => `<option value="${esc(p.id)}"${p.id === selectedId ? " selected" : ""}>${esc(p.name)}</option>`;
+  const options =
+    (active.length ? `<optgroup label="Active">${active.map(opt).join("")}</optgroup>` : "") +
+    (archived.length ? `<optgroup label="Archived">${archived.map(opt).join("")}</optgroup>` : "");
+
+  const sel = (cur, value) => (cur === value ? " selected" : "");
+
+  content.innerHTML = `
+    <div class="project-layout">
+      <div class="card project-overview">
+        <div class="project-overview-head">
+          <select class="project-select" aria-label="Select project">${options}</select>
+          <div class="pills project-pills"></div>
+          <div class="card-about-toggle project-about-toggle"><span class="task-toggle">&#9654;</span> Overview</div>
+        </div>
+        <div class="project-about task-details collapsed"></div>
+      </div>
+      <div class="project-columns">
+        <div class="project-col">
+          <div class="section-title column-header column-header-row">
+            <span>Tasks</span>
+            <div class="section-controls">
+              <label class="filter-label">
+                Show
+                <select class="project-task-filter" aria-label="Filter tasks by status">
+                  <option value="active"${sel(projectTaskFilter, "active")}>Active</option>
+                  <option value="todo"${sel(projectTaskFilter, "todo")}>To do</option>
+                  <option value="in_progress"${sel(projectTaskFilter, "in_progress")}>In progress</option>
+                  <option value="blocked"${sel(projectTaskFilter, "blocked")}>Blocked</option>
+                  <option value="done"${sel(projectTaskFilter, "done")}>Completed</option>
+                  <option value="all"${sel(projectTaskFilter, "all")}>All</option>
+                </select>
+              </label>
+              <label class="filter-label">
+                Sort
+                <select class="project-task-sort" aria-label="Sort tasks">
+                  <option value="priority"${sel(projectTaskSort, "priority")}>Priority</option>
+                  <option value="due_asc"${sel(projectTaskSort, "due_asc")}>Due &uarr; soonest</option>
+                  <option value="due_desc"${sel(projectTaskSort, "due_desc")}>Due &darr; latest</option>
+                  <option value="created_desc"${sel(projectTaskSort, "created_desc")}>Created &darr; newest</option>
+                  <option value="created_asc"${sel(projectTaskSort, "created_asc")}>Created &uarr; oldest</option>
+                </select>
+              </label>
+            </div>
+          </div>
+          <div class="column-body">
+            <div class="project-tasks"><p class="loading">Loading...</p></div>
+          </div>
+        </div>
+        <div class="project-col">
+          <div class="section-title column-header column-header-row">
+            <span>Work log</span>
+            <div class="section-controls">
+              <label class="filter-label">
+                Show
+                <select class="project-log-limit" aria-label="Log entries to show">
+                  <option value="20"${sel(projectLogLimit, "20")}>20</option>
+                  <option value="50"${sel(projectLogLimit, "50")}>50</option>
+                  <option value="100"${sel(projectLogLimit, "100")}>100</option>
+                  <option value="500"${sel(projectLogLimit, "500")}>All</option>
+                </select>
+              </label>
+            </div>
+          </div>
+          <div class="column-body">
+            <div class="project-logs"><p class="loading">Loading...</p></div>
+          </div>
+        </div>
+      </div>
+    </div>`;
+
+  $(".project-select").addEventListener("change", (ev) => {
+    currentProjectId = ev.target.value;
+    localStorage.setItem("logbook-project-id", currentProjectId);
+    loadProjectData(currentProjectId);
+  });
+
+  $(".project-task-filter").addEventListener("change", (ev) => {
+    projectTaskFilter = ev.target.value;
+    renderProjectTasks();
+  });
+
+  $(".project-task-sort").addEventListener("change", (ev) => {
+    projectTaskSort = ev.target.value;
+    renderProjectTasks();
+  });
+
+  $(".project-log-limit").addEventListener("change", (ev) => {
+    projectLogLimit = ev.target.value;
+    reloadProjectLogs();
+  });
+
+  const aboutToggle = $(".project-about-toggle");
+  aboutToggle.addEventListener("click", () => {
+    const about = $(".project-about");
+    const collapsed = about.classList.toggle("collapsed");
+    aboutToggle.querySelector(".task-toggle")?.classList.toggle("expanded", !collapsed);
+  });
+}
+
+async function loadProjectTab() {
+  const projects = await api("/projects?status=all");
+  const list = Array.isArray(projects) ? projects : [];
+  if (!list.length) {
+    content.innerHTML = `<div class="tab-panel"><p class="empty">No projects yet.</p></div>`;
+    return;
+  }
+  // Active projects first, alphabetical within each group.
+  list.sort((a, b) => {
+    const aArch = a.status === "archived";
+    const bArch = b.status === "archived";
+    if (aArch !== bArch) return aArch ? 1 : -1;
+    return a.name.localeCompare(b.name);
+  });
+
+  const selected = list.find((p) => p.id === currentProjectId) || list[0];
+  currentProjectId = selected.id;
+  localStorage.setItem("logbook-project-id", currentProjectId);
+
+  renderProjectShell(list, currentProjectId);
+  await loadProjectData(currentProjectId);
+}
+
 function renderToday(data) {
   let html = "";
 
@@ -827,6 +1147,8 @@ function renderHelp() {
   <dl>
     <dt>Summary</dt>
     <dd>Project cards with task counts. Click a card to expand and see its tasks, rationale, and recent work log.</dd>
+    <dt>Project</dt>
+    <dd>One project at a time, with room to work: pick a project from the dropdown in the overview pill, then read its tasks in the left column and its work log in the right. Tasks can be filtered by status and sorted by priority, or by due/created date in either direction (undated tasks always sort last).</dd>
     <dt>Today</dt>
     <dd>Timeline of today's logged work and completed tasks, grouped by project.</dd>
     <dt>Weekly</dt>
@@ -948,6 +1270,9 @@ async function loadTab(tab) {
         }));
       }
       renderSummary(summaryData, archivedProjects);
+    } else if (tab === "project") {
+      await loadProjectTab();
+      return;
     } else if (tab === "today") {
       renderToday(await api("/summary/today"));
     } else if (tab === "weekly") {
