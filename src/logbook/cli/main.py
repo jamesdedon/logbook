@@ -1045,8 +1045,17 @@ def _install_wrappers(system: str):
 
 
 def _configure_claude_mcp(settings):
-    """Configure Claude Code MCP server with the absolute path to logbook-mcp."""
+    """Configure Claude Code MCP server with the absolute path to logbook-mcp.
+
+    Prefers `claude mcp add`, which lets Claude Code update its own config.
+    Editing ~/.claude.json directly is only a fallback: a running Claude Code
+    session holds its own copy of that file and can write it back over our
+    entry, which is how the MCP registration kept going missing when Claude
+    Code ran the install.
+    """
     import json
+    import shutil
+    import subprocess
 
     claude_config_path = os.path.expanduser("~/.claude.json")
 
@@ -1057,12 +1066,13 @@ def _configure_claude_mcp(settings):
         console.print("  [yellow]![/yellow] logbook-mcp not found in venv, skipping Claude Code config")
         return
 
+    logbook_url = f"http://localhost:{settings.port}"
     mcp_entry = {
         "type": "stdio",
         "command": mcp_bin,
         "args": [],
         "env": {
-            "LOGBOOK_URL": f"http://localhost:{settings.port}",
+            "LOGBOOK_URL": logbook_url,
         },
     }
 
@@ -1081,12 +1091,34 @@ def _configure_claude_mcp(settings):
             console.print(f"  [green]✓[/green] Claude Code MCP already configured")
             return
 
+        claude_bin = shutil.which("claude")
+        if claude_bin:
+            # `mcp add` refuses to overwrite, so drop any stale entry first.
+            if existing:
+                subprocess.run(
+                    [claude_bin, "mcp", "remove", "logbook", "-s", "user"],
+                    capture_output=True, text=True,
+                )
+            result = subprocess.run(
+                [claude_bin, "mcp", "add", "logbook", "-s", "user",
+                 "-e", f"LOGBOOK_URL={logbook_url}", "--", mcp_bin],
+                capture_output=True, text=True,
+            )
+            if result.returncode == 0:
+                console.print(f"[green]Configured Claude Code MCP server (via claude mcp add).[/green]")
+                console.print(f"  Command: {mcp_bin}")
+                console.print("  Restart any open Claude Code sessions to load the logbook tools.")
+                return
+            console.print(f"  [yellow]![/yellow] claude mcp add failed, editing {claude_config_path} instead: "
+                          f"{(result.stderr or result.stdout).strip()}")
+
         servers["logbook"] = mcp_entry
         with open(claude_config_path, "w") as f:
             json.dump(config, f, indent=2)
             f.write("\n")
         console.print(f"[green]Configured Claude Code MCP server.[/green]")
         console.print(f"  Command: {mcp_bin}")
+        console.print("  Restart any open Claude Code sessions to load the logbook tools.")
 
     except (json.JSONDecodeError, OSError) as e:
         console.print(f"  [yellow]![/yellow] Could not configure Claude Code MCP: {e}")
