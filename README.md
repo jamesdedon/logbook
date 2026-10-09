@@ -73,14 +73,15 @@ uv pip install -e .
 # Run database migrations
 uv run alembic upgrade head
 
-# Install and start as a system service (systemd on Linux, launchd on macOS)
-logbook install-service
+# Install and start as a system service (systemd on Linux, launchd on macOS).
+# Use `uv run` here: the `logbook` command isn't on your PATH until this step installs it.
+uv run logbook install-service
 ```
 
 This does three things:
 1. Creates the appropriate service file for your platform and starts the server (restarts automatically on boot).
 2. Installs `logbook` and `logbook-mcp` wrapper scripts to `~/.local/bin` (user-writable on macOS, Linux, and Fedora Silverblue) so they're available from any terminal. If the directory isn't on your `PATH`, the installer prints a one-line `export` hint for your shell rc file.
-3. Configures Claude Code's MCP server with the correct absolute path to `logbook-mcp`.
+3. Tries to register the MCP server with Claude Code by writing a `logbook` entry into `~/.claude.json`. **This step can silently fail to stick**, so always confirm it as described in [Connect Claude Code](#connect-claude-code) below.
 
 ### Verify it's running
 
@@ -89,6 +90,24 @@ curl http://localhost:8000/health
 ```
 
 You should see: `{"status":"ok"}`
+
+### Connect Claude Code
+
+The server running doesn't mean Claude can use it yet; Claude Code needs the `logbook` MCP server registered. Check whether it is:
+
+```bash
+claude mcp get logbook
+```
+
+If that reports the server isn't found, register it yourself at user scope (so it's available in every project), using the absolute path to `logbook-mcp` inside the venv:
+
+```bash
+claude mcp add logbook -s user -e LOGBOOK_URL=http://localhost:8000 -- ~/.logbook/.venv/bin/logbook-mcp
+```
+
+Then run `claude mcp get logbook` again; it should show `Status: ✔ Connected`. Claude Code loads MCP servers when a session starts, so **restart any open Claude Code sessions** before the `logbook_*` tools appear.
+
+> **If Claude Code is doing the install for you:** have it run the `claude mcp add` command above rather than relying on `install-service`. A running Claude Code session keeps its own copy of `~/.claude.json` and can write it back over the entry `install-service` just added. The new tools also won't show up in the session that did the install. Start a fresh one to confirm.
 
 The API is available at `http://localhost:8000`. OpenAPI docs at `/docs`. Web dashboard at `http://localhost:8000/ui/`.
 
