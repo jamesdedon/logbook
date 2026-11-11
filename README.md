@@ -363,3 +363,7 @@ Database migrations are applied automatically via the service configuration.
 - Typer + Rich for CLI
 - MCP SDK for agent integration
 - Vanilla HTML/CSS/JS for web dashboard (no build step)
+
+## License
+
+GPL-3.0-or-later. See [LICENSE](LICENSE).
