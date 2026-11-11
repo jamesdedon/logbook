@@ -60,3 +60,11 @@ async def test_delete_log_entry(client: AsyncClient):
     eid = r.json()["data"]["id"]
     await client.delete(f"/log/{eid}")
     assert (await client.get(f"/log/{eid}")).status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_log_with_unknown_project_is_client_error(client: AsyncClient, project_id: str):
+    # A shortened ID (as the CLI used to print) must not surface as a 500.
+    resp = await client.post("/log", json={"description": "x", "project_id": project_id[:12]})
+    assert resp.status_code == 422
+    assert "26 characters" in resp.json()["detail"]

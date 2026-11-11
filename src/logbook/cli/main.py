@@ -62,11 +62,11 @@ def list_projects(
 
     def show(d):
         table = Table(title="Projects")
-        table.add_column("ID", style="dim", max_width=12)
+        table.add_column("ID", style="dim", no_wrap=True)
         table.add_column("Name", style="bold")
         table.add_column("Status")
         for p in d["data"]:
-            table.add_row(p["id"][:12], p["name"], p["status"])
+            table.add_row(p["id"], p["name"], p["status"])
         console.print(table)
 
     _json_or_table(data, json_out, show)
@@ -93,7 +93,7 @@ def project_create(
     if json_out:
         console.print_json(json.dumps(data))
     else:
-        console.print(f"[green]Created project:[/green] {data['name']} ({data['id'][:12]})")
+        console.print(f"[green]Created project:[/green] {data['name']} ({data['id']})")
 
 
 @project_app.command("show")
@@ -204,12 +204,12 @@ def list_goals(
 
     def show(d):
         table = Table(title="Goals")
-        table.add_column("ID", style="dim", max_width=12)
+        table.add_column("ID", style="dim", no_wrap=True)
         table.add_column("Title", style="bold")
         table.add_column("Status")
         table.add_column("Target")
         for g in d["data"]:
-            table.add_row(g["id"][:12], g["title"], g["status"], g.get("target_date") or "-")
+            table.add_row(g["id"], g["title"], g["status"], g.get("target_date") or "-")
         console.print(table)
 
     _json_or_table(data, json_out, show)
@@ -239,7 +239,7 @@ def goal_create(
     if json_out:
         console.print_json(json.dumps(data))
     else:
-        console.print(f"[green]Created goal:[/green] {data['title']} ({data['id'][:12]})")
+        console.print(f"[green]Created goal:[/green] {data['title']} ({data['id']})")
 
 
 @goal_app.command("show")
@@ -298,14 +298,14 @@ def list_tasks(
 
     def show(d):
         table = Table(title="Tasks")
-        table.add_column("ID", style="dim", max_width=12)
+        table.add_column("ID", style="dim", no_wrap=True)
         table.add_column("Project", style="cyan")
         table.add_column("Title", style="bold")
         table.add_column("Status")
         table.add_column("Priority")
         for t in d["data"]:
             pstyle = {"critical": "red bold", "high": "red", "medium": "yellow", "low": "dim"}.get(t["priority"], "")
-            table.add_row(t["id"][:12], t.get("project_name", ""), t["title"], t["status"], f"[{pstyle}]{t['priority']}[/{pstyle}]")
+            table.add_row(t["id"], t.get("project_name", ""), t["title"], t["status"], f"[{pstyle}]{t['priority']}[/{pstyle}]")
         console.print(table)
 
     _json_or_table(data, json_out, show)
@@ -347,7 +347,7 @@ def task_create(
     if json_out:
         console.print_json(json.dumps(data))
     else:
-        console.print(f"[green]Created task:[/green] {data['title']} ({data['id'][:12]})")
+        console.print(f"[green]Created task:[/green] {data['title']} ({data['id']})")
 
 
 @task_app.command("show")

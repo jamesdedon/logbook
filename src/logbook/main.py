@@ -1,9 +1,11 @@
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
+from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from setproctitle import setproctitle
+from sqlalchemy.exc import IntegrityError
 
 from logbook.routers import background, goals, projects, search, summary, tasks, worklog
 
@@ -28,6 +30,24 @@ app.include_router(background.router)
 
 
 app.mount("/ui", StaticFiles(directory=STATIC_DIR, html=True), name="ui")
+
+
+@app.exception_handler(IntegrityError)
+async def integrity_error_handler(_request: Request, exc: IntegrityError):
+    """Turn constraint violations into client errors instead of a bare 500.
+
+    The common case is a foreign key pointing at a record that doesn't exist,
+    e.g. a project_id that was mistyped or shortened.
+    """
+    if "FOREIGN KEY" in str(exc.orig):
+        return JSONResponse(
+            status_code=422,
+            content={
+                "detail": "A referenced record was not found. Check that project_id, "
+                "goal_id and task_id are complete, existing IDs (26 characters)."
+            },
+        )
+    return JSONResponse(status_code=409, content={"detail": f"Constraint violated: {exc.orig}"})
 
 
 @app.middleware("http")

@@ -155,3 +155,9 @@ async def test_batch_create_with_preexisting_blocker(client: AsyncClient, projec
 async def test_batch_create_empty_list_rejected(client: AsyncClient, project_id: str):
     resp = await client.post(f"/projects/{project_id}/tasks/batch", json={"tasks": []})
     assert resp.status_code == 400
+
+
+@pytest.mark.asyncio
+async def test_create_task_unknown_project_is_client_error(client: AsyncClient, project_id: str):
+    resp = await client.post(f"/projects/{project_id[:12]}/tasks", json={"title": "orphan"})
+    assert resp.status_code == 422

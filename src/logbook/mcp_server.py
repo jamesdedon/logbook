@@ -381,7 +381,7 @@ def logbook_log_list(
     lines = []
     for e in entries:
         time = _to_local_time(e["created_at"])
-        project_note = f" [project: {e['project_id'][:12]}]" if e.get("project_id") else ""
+        project_note = f" [project: {e['project_id']}]" if e.get("project_id") else ""
         lines.append(_wrap(f"{time} — {e['description']}{project_note}"))
     return "\n".join(lines)
 

@@ -1,5 +1,6 @@
 import pytest
 from httpx import ASGITransport, AsyncClient
+from sqlalchemy import event
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from logbook.models import Base
@@ -8,6 +9,11 @@ from logbook.models import Base
 @pytest.fixture
 async def db():
     engine = create_async_engine("sqlite+aiosqlite:///:memory:", echo=False)
+
+    # Match production (logbook.database): enforce foreign keys.
+    @event.listens_for(engine.sync_engine, "connect")
+    def _fk_on(dbapi_conn, _record):
+        dbapi_conn.execute("PRAGMA foreign_keys=ON")
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
 
